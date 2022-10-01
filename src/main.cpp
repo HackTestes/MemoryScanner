@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 
-
+// teste
 unsigned long show_module(MEMORY_BASIC_INFORMATION info) {
     unsigned long usage = 0;
 
