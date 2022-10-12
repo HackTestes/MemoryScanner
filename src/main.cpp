@@ -4,6 +4,8 @@
 #include <iostream>
 #include <string>
 
+#include "MemoryRegion.hpp"
+
 
 unsigned long show_module(MEMORY_BASIC_INFORMATION info) {
     unsigned long usage = 0;
@@ -85,8 +87,8 @@ unsigned long show_module(MEMORY_BASIC_INFORMATION info) {
     return usage;
 }
 
-unsigned long show_modules(HANDLE process) {
-
+unsigned long read_memory_pages(HANDLE process)
+{
     unsigned long usage = 0;
 
     unsigned char* p = NULL;
@@ -112,16 +114,14 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    unsigned long mem_used = read_memory_pages(process_handle);
+    std::cout << "Total memory used: " << mem_used / 1024 << "KB\n";
+
     // Closes the process handle
-    if(CloseHandle == 0)
+    if(CloseHandle(process_handle) == 0)
     {
         return EXIT_FAILURE;
     }
-
-    show_modules(process_handle);
-    unsigned long mem_used = show_modules(process_handle);
-    std::cout << "Total memory used: " << mem_used / 1024 << "KB\n";
-
 
     //---------------------------------------Tests--------------------------------------------------------------
 
@@ -136,16 +136,19 @@ int main(int argc, char **argv)
 
     /*for(int i=0; i<4; ++i)
     {
-        std::cout << std::hex << int(buffer[i]) << " "; 
+        std::cout << int(buffer[i]) << " "; 
     }*/
 
-    //std::cout << "\n" << std::endl;
+    std::cout << "\n" << std::endl;
 
     not_foo = buffer;
+    int not_not_foo = int(*not_foo);
+    std::cout << not_not_foo << "\n";
 
-    bool comparison = int(*not_foo) == 33;
+    //bool comparison = int(*not_foo) == 33;
 
-    std::cout << comparison << "\n";
+    buffer[0] = 0;
+    std::cout << not_not_foo << "\n";
 
     return EXIT_SUCCESS;
 }
