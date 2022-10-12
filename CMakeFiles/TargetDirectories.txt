@@ -1,3 +1,0 @@
-E:/code_repo/Memory_scanner/CMakeFiles/MemoryScanner.dir
-E:/code_repo/Memory_scanner/CMakeFiles/ALL_BUILD.dir
-E:/code_repo/Memory_scanner/CMakeFiles/ZERO_CHECK.dir
