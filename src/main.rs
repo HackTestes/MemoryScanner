@@ -1,4 +1,6 @@
 use std::env;
+use std::io;
+mod args_parse;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,
@@ -29,11 +31,11 @@ fn ReadPageInfo(mut page_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_
 
     print!("\t");
 
-    if ( (page_info.AllocationProtect & windows_sys::Win32::System::Memory::PAGE_NOCACHE) != 0 )
+    if (page_info.AllocationProtect & windows_sys::Win32::System::Memory::PAGE_NOCACHE) != 0
     {
         print!("non-cacheable");
     } 
-    if ( (page_info.AllocationProtect & windows_sys::Win32::System::Memory::PAGE_GUARD) != 0 )
+    if (page_info.AllocationProtect & windows_sys::Win32::System::Memory::PAGE_GUARD) != 0
     {
         print!("guard page");
     }
@@ -84,7 +86,7 @@ fn GetMemoryPageInfo(mut process: windows_sys::Win32::Foundation::HANDLE) -> u64
         {
             ReadPageInfo(info);
 
-            if(info.AllocationProtect == windows_sys::Win32::System::Memory::PAGE_READWRITE)
+            if info.AllocationProtect == windows_sys::Win32::System::Memory::PAGE_READWRITE
             {
                 //println!("Read write (execute) page");
             }
@@ -102,6 +104,13 @@ fn main()
     let arg = &args[1];
 
     let process_id: u32 = arg.parse::<u32>().unwrap();
+
+    let mut guess = String::new();
+ 
+    args_parse::ParseArg("-N --filter=u32,u64 -J=12 --help".to_string());
+    //io::stdin().read_line(&mut guess).expect("failed to readline");
+ 
+    print!("You entered {}", guess);
 
     unsafe
     {
