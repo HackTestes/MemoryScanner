@@ -6,12 +6,13 @@
 
 ## Requirements
 
-- WindowsOS
+- WindowsOS >= 10
+- Command line tool (Window terminal)
 
 ## Build
 
-- C++ compiler (MSVC)
-- 
+- Rust compiler
+- [Windows sys](https://crates.io/crates/windows-sys)
 
 ## Important APIs and resources used
 
@@ -29,8 +30,19 @@
 
 - [MEMORY_BASIC_INFORMATION](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information)
 
+- [Windows sys crate documentation](https://docs.rs/windows-sys/0.42.0/windows_sys/)
+
 ## Key features
 
-[X] Serach for values in memory
+### Read process memory
+- [ ] Serach for values in memory
+    - [ ] Use exact values (u32, u64, i32, i64, f32, f64)
+    - [ ] Use unknown initial value (Incresed, decreased or equal value)*
 
-[x] Write on process memory
+### Write process memory
+- [ ] Write process memory
+
+### General
+- [ ] Multithreaded search
+- [ ] Minimal memory footprint
+- [ ] Single executable

@@ -1,6 +1,8 @@
 use std::env;
 use std::io;
 mod args_parse;
+mod Config;
+mod ReadMemory;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,
@@ -109,8 +111,6 @@ fn main()
  
     args_parse::ParseArg("-N --filter=u32,u64 -J=12 --help".to_string());
     //io::stdin().read_line(&mut guess).expect("failed to readline");
- 
-    print!("You entered {}", guess);
 
     unsafe
     {
@@ -131,7 +131,7 @@ fn main()
     let mut buffer: [u8; 5] = [0; 5];
 
     // 15 in little endian
-    buffer[0] = 255;
+    buffer[0] = 15;
     buffer[1] = 0;
     buffer[2] = 0;
     buffer[3] = 0;
@@ -142,10 +142,10 @@ fn main()
     unsafe
     {
         let foo = *ptr as u32;
-        println!("Var: {}", *ptr as u32);
+        println!("Var: {}", u32::from_ne_bytes(buffer[0..4].try_into().unwrap()));
 
         // foo must change, if not it must be a copy
-        buffer[0] = 0;
+        //buffer[0] = 0;
         println!("Var: {}", *ptr as u32);
     }
     
