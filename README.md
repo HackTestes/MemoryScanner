@@ -46,3 +46,25 @@
 - [ ] Multithreaded search
 - [ ] Minimal memory footprint
 - [ ] Single executable
+
+## Roadmap
+
+20/11
+- [ ] Read Memory
+    - [ ] Multithreaded search
+    - [ ] Select only writable pages
+    - [X] Select multiple data types
+    - [ ] Copy pages (per page)
+    - [ ] Copy pages (all pages at once)
+
+25/11
+- [ ] Write Memory
+    - [ ] Write value on matched address
+
+30/11
+- [ ] Command parser
+    - [X] Error checking
+    - [X] Help
+    - [ ] Save previous correct command
+    - [ ] Read memory command
+    - [ ] Write memory command
