@@ -3,6 +3,8 @@ use std::convert::From;
 use std::fmt::Debug;
 use std::mem::size_of;
 use std::thread;
+use std::sync::Arc;
+use std::collections::HashSet;
 use windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION;
 use crate::Config::*;
 
@@ -36,6 +38,8 @@ macro_rules! CompareMemoryValue
 
                 // CHECKS
                 // The loop must only contain a valid range
+                println!("START-> Start: {} -- End: {} -- Search size: {} -- Buffer.len(): {}", start, end_index, private_region_size, buffer.len());
+
 
                 // In case the allocated size per thread (!= buffer.len()) being smaller than data type
                 if end_index < start
@@ -43,18 +47,20 @@ macro_rules! CompareMemoryValue
                     end_index = start;
                 }
 
-                // End_index goes out of bounds, this fixes it
-                // What does happen when it doesn't have enough space? The first condition will prevent this
-                if end_index >= buffer.len()
-                {
-                    end_index = buffer.len()-1;
-                }
-
                 // we haven't reached the buffer limit, so we can add an extension
                 if end_index + size_of::<$target_type>() < buffer.len()
                 {   
                     end_index += extension_size;
                 }
+
+                // End_index goes out of bounds, this fixes it
+                // What does happen when it doesn't have enough space? The first condition will prevent this
+                if end_index + size_of::<$target_type>() >= buffer.len()
+                {
+                    end_index = buffer.len() - size_of::<$target_type>();
+                }
+
+                println!("END-> Start: {} -- End: {} -- Search size: {} -- Buffer.len(): {}", start, end_index, private_region_size, buffer.len());
 
 
                 // Since the biggest overhead comes from the loop, all values and checks are pre-computed
@@ -82,9 +88,9 @@ macro_rules! CompareMemoryValue
 }
 
 
-pub unsafe fn MatchMemory(filter_list: Vec<FilterOption>, target_value: String, buffer: &Vec<u8>, start: usize, private_region_size: usize) -> Vec<usize>
+pub unsafe fn MatchMemory(filter_list: Vec<FilterOption>, target_value: String, buffer: Arc<Vec<u8>>, start: usize, private_region_size: usize) -> Vec<usize>
 {
-    let mut match_address: Vec<usize> = [].to_vec();
+    let mut match_address: Vec<usize> = vec![];
 
     for filter in &filter_list
     {
@@ -97,7 +103,6 @@ pub unsafe fn MatchMemory(filter_list: Vec<FilterOption>, target_value: String, 
             FilterOption::I64 => CompareMemoryValue!( i64, target_value.clone(), &buffer, start, private_region_size ),
             FilterOption::F32 => CompareMemoryValue!( f32, target_value.clone(), &buffer, start, private_region_size ),
             FilterOption::F64 => CompareMemoryValue!( f64, target_value.clone(), &buffer, start, private_region_size ),
-            _=> [].to_vec(),
         };
 
         if result.len() != 0
@@ -111,16 +116,40 @@ pub unsafe fn MatchMemory(filter_list: Vec<FilterOption>, target_value: String, 
     return match_address;
 }
 
-fn MultithreadSearch(page_copy: PageCopy, thread_count: usize)
+pub fn MultithreadSearch(page_copy: Vec<u8>, thread_count: usize, filter_list: Vec<FilterOption>, target_value: String) -> HashSet<usize>
 {
-    let mut size_per_thread: usize = 0;
+    //let mut size_per_thread: usize = 0;
+    let size_per_thread = (page_copy.len() as f64 / thread_count as f64).ceil() as usize;
 
-    size_per_thread = page_copy.memory.len() / thread_count;
+    let memory = Arc::new(page_copy);
 
-    let mut thread_handles: Vec<thread::JoinHandle<()>> = Vec::with_capacity( thread_count * size_of::<thread::JoinHandle<()>>() );
+    let mut thread_handles: Vec< thread::JoinHandle<Vec<usize>> > = Vec::with_capacity(0);
 
-    
+    // Start threads
+    for thread_id in 0..thread_count
+    {
+        let arc_clone = Arc::clone(&memory);
+        let filter_list_clone = filter_list.clone();
+        let target_value_clone = target_value.clone();
+        thread_handles.push(thread::spawn(move || unsafe{ MatchMemory(filter_list_clone, target_value_clone, arc_clone, thread_id*size_per_thread, size_per_thread) } ));
+    }
+
+    let mut final_result: HashSet<usize> = HashSet::new(); // Will help deduplicate results
+    // Wait for all threads to finish and collect the results
+    for thread in thread_handles.into_iter()
+    {
+        let results_array = thread.join().unwrap();
+
+        for result in results_array
+        {
+            final_result.insert(result);
+        }
+        
+    }
+
+    return final_result;
 }
+
 
 // Unit test
 #[cfg(test)]
@@ -147,8 +176,9 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![15, 0, 0, 0, 0, 0, 0, 0, 0];
-            assert_eq!( [0].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), &buffer, 0, buffer.len() ));
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0, 0, 0, 0, 0, 0]);
+            let buffer_len = buffer.len();
+            assert_eq!( [0].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 0, buffer_len ));
         }
     }
 
@@ -157,8 +187,9 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![0, 0, 0, 0, 0, 15, 0, 0, 0];
-            assert_eq!( [5].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), &buffer, 5, buffer.len()-5 ));
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 0, 15, 0, 0, 0]);
+            let buffer_len = buffer.len();
+            assert_eq!( [5].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 5, buffer_len-5 ));
         }
     }
 
@@ -167,8 +198,9 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![15, 0, 0, 0];
-            assert_eq!( true, MatchMemory([FilterOption::U64].to_vec(), "15".to_string(), &buffer, 0, buffer.len() ).len() == 0);
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0]);
+            let buffer_len = buffer.len();
+            assert_eq!( true, MatchMemory([FilterOption::U64].to_vec(), "15".to_string(), buffer, 0, buffer_len ).len() == 0);
         }
     }
 
@@ -178,8 +210,8 @@ mod tests
         unsafe
         {
             // Consider 4 threads reading the buffer
-            let buffer: Vec<u8> = vec![15, 0, 0, 0, 0, 0, 0, 0];
-            assert_eq!( [0].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), &buffer, 0, 2 ));
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!( [0].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 0, 2 ));
         }
     }
 
@@ -189,8 +221,8 @@ mod tests
         unsafe
         {
             // Consider 4 threads reading the buffer
-            let buffer: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0];
-            assert_eq!( [4].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), &buffer, 4, 2 ));
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0]);
+            assert_eq!( [4].to_vec(), MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 4, 2 ));
         }
     }
 
@@ -200,8 +232,8 @@ mod tests
         unsafe
         {
             // Consider 10 threads reading the buffer and the space is ceil-rounded - thread 10
-            let buffer: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0];
-            assert_eq!( true, MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), &buffer, 10, 1 ).len() == 0);
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0]);
+            assert_eq!( true, MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 10, 1 ).len() == 0);
         }
     }
 
@@ -211,8 +243,48 @@ mod tests
         unsafe
         {
             // Consider 10 threads reading the buffer and the space is ceil-rounded - thread 7
-            let buffer: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0];
-            assert_eq!( true, MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), &buffer, 7, 1 ).len() == 0);
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0]);
+            assert_eq!( true, MatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 7, 1 ).len() == 0);
+        }
+    }
+
+    #[test]
+    fn FindMatch_MultiThread_RegularCase()
+    {
+        unsafe
+        {
+            let buffer: Vec<u8> = vec![15, 0, 0, 0, 0, 0, 0, 0, 0];
+            assert!( MultithreadSearch(buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).contains(&0) );
+        }
+    }
+
+    #[test]
+    fn FindMatch_MultiThread_MiddleCase()
+    {
+        unsafe
+        {
+            let buffer: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0, 0];
+            assert!( MultithreadSearch(buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).contains(&4) );
+        }
+    }
+
+    #[test]
+    fn FindMatch_MultiThread_EndCase()
+    {
+        unsafe
+        {
+            let buffer: Vec<u8> = vec![0, 0, 0, 0, 0, 15, 0, 0, 0];
+            assert!( MultithreadSearch(buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).contains(&5) );
+        }
+    }
+
+    #[test]
+    fn FindMatch_MultiThread_Intersection()
+    {
+        unsafe
+        {
+            let buffer: Vec<u8> = vec![0, 0, 15, 0, 0, 0, 0, 0];
+            assert!( MultithreadSearch(buffer, 2, [FilterOption::U32].to_vec(), "15".to_string()).contains(&2) );
         }
     }
 }
