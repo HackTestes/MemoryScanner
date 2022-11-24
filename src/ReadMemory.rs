@@ -47,9 +47,14 @@ impl AddressMatch
         };
     }
 
+    pub fn len(&self) -> usize
+    {
+        return self.U32.len() + self.U64.len() + self.I32.len() + self.I64.len() + self.F32.len() + self.F64.len();
+    }
+
     pub fn is_empty(&self) -> bool
     {
-        if self.U32.len() + self.U64.len() + self.I32.len() + self.I64.len() + self.F32.len() + self.F64.len() == 0
+        if self.len() == 0
         {
             return true;
         }
@@ -72,6 +77,20 @@ impl MemoryMatches
             page_info: page,
             matches: search_results
         };
+    }
+
+    pub fn get_absolute_virtual_address(&self) -> AddressMatch
+    {
+        let mut virtual_adresses = AddressMatch::new();
+
+        virtual_adresses.U32 = self.matches.U32.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+        virtual_adresses.U64 = self.matches.U64.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+        virtual_adresses.I32 = self.matches.I32.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+        virtual_adresses.I64 = self.matches.I64.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+        virtual_adresses.F32 = self.matches.F32.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+        virtual_adresses.F64 = self.matches.F64.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+
+        return virtual_adresses;
     }
 }
 
@@ -586,20 +605,18 @@ mod tests
                 windows_sys::Win32::System::Threading::PROCESS_VM_READ |
                 windows_sys::Win32::System::Threading::PROCESS_VM_WRITE,
                 0, // False
-                11984); // Hardcoded process id
+                13632); // Hardcoded process id
 
-            let mut result = SearchProcessMemory_Initial(vec![FilterOption::U32], 6, "4".to_string(), process_handle);
+            let mut result = SearchProcessMemory_Initial(vec![FilterOption::U32], 6, "1".to_string(), process_handle);
             println!("Page matches: {}", &result.len());
             
-            for i in 5..9
+            for i in 0..3
             {
                 let mut guess = String::new();
                 io::stdin().read_line(&mut guess).expect("failed to readline");
 
-                println!("{guess}");
-
-                result = FilterMatches(result, vec![FilterOption::U32], 6, i.to_string(), process_handle);
-                println!("Matches: {}", &result.len());
+                result = FilterMatches(result, vec![FilterOption::U32], 6, guess.trim().to_string(), process_handle);
+                println!("Page Matches: {} -- First page matches: {} -- Matches addresses: {:?}", &result.len(), &result[0].matches.len(), &result[0].get_absolute_virtual_address());
             }
 
             windows_sys::Win32::Foundation::CloseHandle(process_handle);
