@@ -49,7 +49,7 @@ PS: the implementation here copies a whole memory block of contiguous writable m
 
 This one is a lot more complex, because we need a copy of all the writable memory at a certain point in time. For example, a health bar in games: we need to copy all of it at "full health" to later compare the damage. So we need all the memory for "Full Health" to later compare changes to the small chunks.
 
-This creates a serious problem: how much memory is needed? And Can we store it? If the target is big, the system probably won't have enough memory and to mitigate this situation, we can store some results in a file simiar to [paging](https://en.wikipedia.org/wiki/Memory_paging) in OSes, but at the cost of runtime performance.
+This creates a serious problem: how much memory is needed? And Can we store it? If the target is big, the system probably won't have enough memory and to mitigate this situation, we can store some results in a file similar to [paging](https://en.wikipedia.org/wiki/Memory_paging) in OSes, but at the cost of runtime performance.
 
 So, due to increased complexity, this mode will not be supported.
 
@@ -72,14 +72,14 @@ So, due to increased complexity, this mode will not be supported.
 ## Roadmap
 
 20/11
-- [ ] Read Memory
-    - [ ] Multithreaded search
+- [X] Read Memory
+    - [X] Multithreaded search
         - [X] Initial results
-        - [ ] Search on previous results
-    - [ ] Select only writable pages
+        - [X] Search on previous results
+    - [X] Select only writable pages
     - [X] Select multiple data types
-    - [ ] Copy pages (per page)
-    - [ ] Copy pages (all pages at once)
+    - [X] Copy pages (per page)
+    - [ ] Copy pages (all pages at once)*
 
 25/11
 - [ ] Write Memory
