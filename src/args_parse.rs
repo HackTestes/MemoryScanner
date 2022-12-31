@@ -36,10 +36,12 @@ impl Arg
     }
 }
 
-pub fn ParseArg(command: String) -> Result<(), ArgError>
+pub fn ParseArg(command: String) -> Result<Configuration, ArgError>
 {
     // Holds all program arguments
     let program_args = [
+
+        // HELP
         Arg::new("-h".to_string(), "--help".to_string(), [].to_vec(), "Displays help text".to_string(), |opt: &[Arg], parameters: Vec<String>, index: usize| -> Result<(), ArgError> 
         {
             let mut final_help_text: String = String::new();
@@ -64,6 +66,7 @@ pub fn ParseArg(command: String) -> Result<(), ArgError>
             return Ok(());
         }),
 
+        // FILTER
         Arg::new("-f".to_string(), "--filter".to_string(), ["value_types...".to_string()].to_vec(), "Selects which data types should be used in the filters".to_string(), |opt: &[Arg], parameters: Vec<String>, index: usize| -> Result<(), ArgError>
         {
             let mut filter_list: Vec<FilterOption> = [].to_vec();
@@ -87,29 +90,38 @@ pub fn ParseArg(command: String) -> Result<(), ArgError>
             return Ok(());
         }),
 
+        // NUMBER OF THREADS
         Arg::new("-j".to_string(), "--jobs".to_string(), ["number_of_threads".to_string()].to_vec(), "Selects the maximum number of worker threads".to_string(), |opt: &[Arg], parameters: Vec<String>, index: usize| -> Result<(), ArgError>
         {
             println!("JOBS TEXT");
             return Ok(());
         }),
 
+        // TYPE OF SCAN
         Arg::new("-s".to_string(), "--scanType".to_string(), ["scan_type".to_string()].to_vec(), "Chooses how the search is performed (exact or unknown value)".to_string(), |opt: &[Arg], parameters: Vec<String>, index: usize| -> Result<(), ArgError>
         {
             println!("JOBS TEXT");
             return Ok(());
         }),
 
+        // NEW SCAN OR NOT
         Arg::new("-s".to_string(), "--scanStart".to_string(), ["start".to_string()].to_vec(), "Chooses whether the program should make a new scan or not".to_string(), |opt: &[Arg], parameters: Vec<String>, index: usize| -> Result<(), ArgError>
         {
             println!("JOBS TEXT");
             return Ok(());
         }),
 
+        // VALUE TO SEARCH
         Arg::new("-v".to_string(), "--value".to_string(), ["value".to_string()].to_vec(), "Value that should be searched".to_string(), |opt: &[Arg], parameters: Vec<String>, index: usize| -> Result<(), ArgError>
         {
             println!("JOBS TEXT");
             return Ok(());
         })
+
+        // FREEZE VALUE
+        // SLEEP TIME
+        // WRITE TO ALL ADDRESSES
+        // SELECT ADDRESS
     ];
 
     // Maps the array into a HashMap
@@ -193,13 +205,12 @@ pub fn ParseArg(command: String) -> Result<(), ArgError>
         }
     }
 
-    return Ok(());
+    return Ok(Configuration::new());
 }
 
 
 
 // Unit test
-
 #[cfg(test)]
 mod tests
 {
@@ -220,7 +231,14 @@ mod tests
     #[test]
     fn ReadMemoryCommand()
     {
-        assert_eq!( Ok(()), ParseArg("--filter=u32,u64 -j=12 --help".to_string()) );
+        assert_eq!( Ok(Configuration::new()), ParseArg("--filter=u32,u64 -j=12 --help".to_string()) );
     }
 
+    // HELP ONLY
+
+    // READ MEM
+    
+    // WRITE MEM
+
+    // DISPLAY
 }

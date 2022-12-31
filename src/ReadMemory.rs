@@ -65,7 +65,7 @@ impl AddressMatch
 pub struct MemoryMatches
 {
     page_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION,
-    matches: AddressMatch,
+    pub matches: AddressMatch,
 }
 
 impl MemoryMatches
@@ -142,7 +142,7 @@ macro_rules! InitialCompareMemoryValue
 
                 // Since the biggest overhead comes from the loop, all values and checks are pre-computed
                 // and with this approach, we avoid the need to do bounds-check in every iteration
-                // +1 (inclusive end)
+                // "+1" (inclusive end)
                 for index in start..end_index+1
                 {
                     let process_memory_value = <$target_type>::from_le_bytes( buffer[index..( index+size_of::<$target_type>() )].try_into().unwrap() );
@@ -200,22 +200,20 @@ pub unsafe fn InitialMatchMemory(filter_list: Vec<FilterOption>, target_value: S
     return match_address;
 }
 
-pub fn InitialMultithreadSearch(page_copy: Vec<u8>, thread_count: usize, filter_list: Vec<FilterOption>, target_value: String) -> AddressMatch
+pub fn InitialMultithreadSearch(page_copy: &Arc<Vec<u8>>, thread_count: usize, filter_list: Vec<FilterOption>, target_value: String) -> AddressMatch
 {
     //let mut size_per_thread: usize = 0;
     let size_per_thread = (page_copy.len() as f64 / thread_count as f64).ceil() as usize;
-
-    let memory = Arc::new(page_copy);
 
     let mut thread_handles: Vec< thread::JoinHandle<AddressMatch> > = Vec::with_capacity(0);
 
     // Start threads
     for thread_id in 0..thread_count
     {
-        let arc_clone = Arc::clone(&memory);
+        let memory = Arc::clone(page_copy);
         let filter_list_clone = filter_list.clone();
         let target_value_clone = target_value.clone();
-        thread_handles.push(thread::spawn(move || unsafe{ InitialMatchMemory(filter_list_clone, target_value_clone, arc_clone, thread_id*size_per_thread, size_per_thread) } ));
+        thread_handles.push(thread::spawn(move || unsafe{ InitialMatchMemory(filter_list_clone, target_value_clone, memory, thread_id*size_per_thread, size_per_thread) } ));
     }
 
     let mut final_result = AddressMatch::new();
@@ -293,38 +291,50 @@ fn GetAllWritablePagesInfo(mut process: windows_sys::Win32::Foundation::HANDLE) 
 pub fn SearchProcessMemory_Initial(filter_list: Vec<FilterOption>, thread_count: usize, target_value: String, process_handle: HANDLE) -> Vec<MemoryMatches>
 {
     let all_memory_sections_info = GetAllWritablePagesInfo(process_handle);
-    let mut all_pages_matches: Vec<MemoryMatches> = vec![]; 
+    let mut all_pages_matches: Vec<MemoryMatches> = vec![];
+
+    // This will reduce the amount of allocations needed
+    let initial_buffer_size: usize = 1073741824;
+    let mut memory_region_buffer: Vec<u8> = Vec::with_capacity(initial_buffer_size);
+    let mut memory_region_buffer_arc = Arc::new(memory_region_buffer);    
 
     for memory_section_info in all_memory_sections_info
     {
-        let mut memory_region_buffer: Vec<u8> = Vec::with_capacity(memory_section_info.RegionSize);
-        unsafe {memory_region_buffer.set_len( memory_region_buffer.capacity() );}
-        // Alternative - Could be slower, since it initializes the memory to zero
-        //let mut memory_region_buffer: Vec<u8> = vec![0; memory_section_info.RegionSize];
+        //let mut memory_region_buffer: Vec<u8> = Vec::with_capacity(memory_section_info.RegionSize);
+        //unsafe {memory_region_buffer.set_len( memory_region_buffer.capacity() );}
 
+        // Resize if needed
+        if (*memory_region_buffer_arc).capacity() < memory_section_info.RegionSize
+        {
+            Arc::get_mut(&mut memory_region_buffer_arc).unwrap().resize(memory_section_info.RegionSize, 0);
+        }
+
+        unsafe {Arc::get_mut(&mut memory_region_buffer_arc).unwrap().set_len( memory_section_info.RegionSize );}
+
+        // Gets the amount of transfered bytes to the buffer
         let mut transfered_bytes: usize = 0;
         let mut transfered_bytes_ptr: *mut usize = &mut transfered_bytes;
 
-        unsafe
+        // Get the copy of the memory region
+        let success_code = unsafe{ReadProcessMemory(process_handle, memory_section_info.BaseAddress, Arc::get_mut(&mut memory_region_buffer_arc).unwrap().as_mut_ptr() as *mut c_void, memory_section_info.RegionSize, transfered_bytes_ptr)};
+
+        println!("transfered_bytes: {} -- Base Address: {} -- Region Size: {} -- Buffer.len: {} -- Code: {} -- GetLastError: {}", transfered_bytes, memory_section_info.BaseAddress as usize, memory_section_info.RegionSize, memory_region_buffer_arc.len(), success_code, unsafe{ GetLastError()});
+
+        // Search for successful attempts only
+        if success_code != 0
         {
-            // Get the copy of the memory region
-            let success_code = ReadProcessMemory(process_handle, memory_section_info.BaseAddress, memory_region_buffer.as_mut_ptr() as *mut c_void, memory_section_info.RegionSize, transfered_bytes_ptr);
+            let search = InitialMultithreadSearch(&memory_region_buffer_arc, thread_count, filter_list.clone(), target_value.clone());
 
-            println!("transfered_bytes: {} -- Base Address: {} -- Region Size: {} -- Buffer.len: {} -- Code: {} -- GetLastError: {}", transfered_bytes, memory_section_info.BaseAddress as usize, memory_section_info.RegionSize, memory_region_buffer.len(), success_code, GetLastError());
+            println!("Search result: {:?}\n", search);
 
-            // Search for successful attempts only
-            if success_code != 0
+            if search.is_empty() != true
             {
-                let search = InitialMultithreadSearch(memory_region_buffer, thread_count, filter_list.clone(), target_value.clone());
-
-                println!("Search result: {:?}\n", search);
-
-                if search.is_empty() != true
-                {
-                    all_pages_matches.push( MemoryMatches::new(memory_section_info, search) );
-                }
+                all_pages_matches.push( MemoryMatches::new(memory_section_info, search) );
             }
         }
+
+        // Get back to the original size
+        Arc::get_mut(&mut memory_region_buffer_arc).unwrap().resize(initial_buffer_size, 0);
     }
     return all_pages_matches;
 }
@@ -399,7 +409,7 @@ macro_rules! ComparePreviousMatch
     }
 }
 
-
+// Get the previous results and filter the results by performing a new search
 pub fn FilterMatches(search_results: Vec<MemoryMatches>, filter_list: Vec<FilterOption>, thread_count: usize, target_value: String, process_handle: HANDLE) -> Vec<MemoryMatches>
 {
     let mut search_previous_results: Vec<MemoryMatches> = vec![];
@@ -456,6 +466,99 @@ pub fn FilterMatches(search_results: Vec<MemoryMatches>, filter_list: Vec<Filter
     return search_previous_results;
 }
 
+// Test code
+/*fn ReadPageInfo(mut page_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION)
+{
+    print!("Base Address: {} -- RegionSize: {}\t", page_info.BaseAddress as u64, page_info.RegionSize);
+
+    match page_info.State
+    {
+        windows_sys::Win32::System::Memory::MEM_COMMIT => print!("Committed"),
+        windows_sys::Win32::System::Memory::MEM_RESERVE => print!("Reserved"),
+        windows_sys::Win32::System::Memory::MEM_FREE => print!("Free"),
+        _=> print!("Empty State"),
+    }
+
+    print!("\t");
+
+    match page_info.Type
+    {
+        windows_sys::Win32::System::Memory::MEM_IMAGE => print!("Code Module"),
+        windows_sys::Win32::System::Memory::MEM_MAPPED => print!("Mapped"),
+        windows_sys::Win32::System::Memory::MEM_PRIVATE => print!("Private"),
+        _=> print!("Empty Type"),
+    }
+
+    print!("\t");
+
+    if (page_info.AllocationProtect & windows_sys::Win32::System::Memory::PAGE_NOCACHE) != 0
+    {
+        print!("non-cacheable");
+    } 
+    if (page_info.AllocationProtect & windows_sys::Win32::System::Memory::PAGE_GUARD) != 0
+    {
+        print!("guard page");
+    }
+
+    print!("\t");
+
+    page_info.AllocationProtect &= !(windows_sys::Win32::System::Memory::PAGE_GUARD | windows_sys::Win32::System::Memory::PAGE_NOCACHE);
+
+    match page_info.AllocationProtect
+    {
+        windows_sys::Win32::System::Memory::PAGE_READONLY => print!("Read Only"),
+        windows_sys::Win32::System::Memory::PAGE_READWRITE => print!("Read/Write"),
+        windows_sys::Win32::System::Memory::PAGE_WRITECOPY => print!("Copy on Write"),
+        windows_sys::Win32::System::Memory::PAGE_EXECUTE => print!("Execute only"),
+        windows_sys::Win32::System::Memory::PAGE_EXECUTE_READ => print!("Execute/Read"),
+        windows_sys::Win32::System::Memory::PAGE_EXECUTE_READWRITE => print!("Execute/Read/Write"),
+        windows_sys::Win32::System::Memory::PAGE_EXECUTE_WRITECOPY => print!("COW Executable"),
+        _=> print!("Empty AllocationProtect"),
+    }
+
+    print!("\n\n");
+}
+
+
+fn GetMemoryPageInfo(mut process: windows_sys::Win32::Foundation::HANDLE) -> u64
+{
+    unsafe
+    {
+        let mut usage: u64 = 0;
+
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+
+        let mut info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
+            BaseAddress: std::ptr::null_mut(),
+            AllocationBase: std::ptr::null_mut(),
+            AllocationProtect: 0,
+            RegionSize: 0,
+            PartitionId: 0,
+            State: 0,
+            Protect: 0,
+            Type: 0,
+        };
+
+        let mut bytes = windows_sys::Win32::System::Memory::VirtualQueryEx(process, p, &mut info, std::mem::size_of::<windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION>());
+        println!("Entering Loop");
+        
+        while windows_sys::Win32::System::Memory::VirtualQueryEx(process, p, &mut info, std::mem::size_of::<windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION>()) == std::mem::size_of::<windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION>()
+        {
+            ReadPageInfo(info);
+
+            if info.AllocationProtect == windows_sys::Win32::System::Memory::PAGE_READWRITE
+            {
+                //println!("Read write (execute) page");
+            }
+
+            p = info.BaseAddress;
+            p = p.add(info.RegionSize);
+        }
+        return usage;
+    }
+}*/
+
+
 // Unit test
 #[cfg(test)]
 mod tests
@@ -482,7 +585,8 @@ mod tests
     {
         unsafe
         {
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0, 0, 0, 0, 0, 0]);
+            let vector: Vec<u8> = vec![15, 0, 0, 0, 0, 0, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             let buffer_len = buffer.len();
             assert_eq!( [0].to_vec(), InitialMatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 0, buffer_len ).U32);
         }
@@ -493,7 +597,8 @@ mod tests
     {
         unsafe
         {
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 0, 15, 0, 0, 0]);
+            let vector: Vec<u8> = vec![0, 0, 0, 0, 0, 15, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             let buffer_len = buffer.len();
             assert_eq!( [5].to_vec(), InitialMatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 5, buffer_len-5 ).U32);
         }
@@ -504,7 +609,8 @@ mod tests
     {
         unsafe
         {
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0]);
+            let vector: Vec<u8> = vec![15, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             let buffer_len = buffer.len();
             assert_eq!( true, InitialMatchMemory([FilterOption::U64].to_vec(), "15".to_string(), buffer, 0, buffer_len ).U64.len() == 0);
         }
@@ -516,7 +622,8 @@ mod tests
         unsafe
         {
             // Consider 4 threads reading the buffer
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0, 0, 0, 0, 0]);
+            let vector: Vec<u8> = vec![15, 0, 0, 0, 0, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             assert_eq!( [0].to_vec(), InitialMatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 0, 2 ).U32);
         }
     }
@@ -527,7 +634,8 @@ mod tests
         unsafe
         {
             // Consider 4 threads reading the buffer
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0]);
+            let vector: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             assert_eq!( [4].to_vec(), InitialMatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 4, 2 ).U32);
         }
     }
@@ -538,7 +646,8 @@ mod tests
         unsafe
         {
             // Consider 10 threads reading the buffer and the space is ceil-rounded - thread 10
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0]);
+            let vector: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             assert_eq!( true, InitialMatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 10, 1 ).U32.len() == 0);
         }
     }
@@ -549,7 +658,8 @@ mod tests
         unsafe
         {
             // Consider 10 threads reading the buffer and the space is ceil-rounded - thread 7
-            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0]);
+            let vector: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0];
+            let buffer: Arc<Vec<u8>> = Arc::new(vector);
             assert_eq!( true, InitialMatchMemory([FilterOption::U32].to_vec(), "15".to_string(), buffer, 7, 1 ).U32.len() == 0);
         }
     }
@@ -559,8 +669,8 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![15, 0, 0, 0, 0, 0, 0, 0, 0];
-            assert!( InitialMultithreadSearch(buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&0) );
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![15, 0, 0, 0, 0, 0, 0, 0, 0]);
+            assert!( InitialMultithreadSearch(&buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&0) );
         }
     }
 
@@ -569,8 +679,8 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![0, 0, 0, 0, 15, 0, 0, 0, 0];
-            assert!( InitialMultithreadSearch(buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&4) );
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 15, 0, 0, 0, 0]);
+            assert!( InitialMultithreadSearch(&buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&4) );
         }
     }
 
@@ -579,8 +689,8 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![0, 0, 0, 0, 0, 15, 0, 0, 0];
-            assert!( InitialMultithreadSearch(buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&5) );
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 0, 0, 0, 15, 0, 0, 0]);
+            assert!( InitialMultithreadSearch(&buffer, 6, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&5) );
         }
     }
 
@@ -589,13 +699,13 @@ mod tests
     {
         unsafe
         {
-            let buffer: Vec<u8> = vec![0, 0, 15, 0, 0, 0, 0, 0];
-            assert!( InitialMultithreadSearch(buffer, 2, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&2) );
+            let buffer: Arc<Vec<u8>> = Arc::new(vec![0, 0, 15, 0, 0, 0, 0, 0]);
+            assert!( InitialMultithreadSearch(&buffer, 2, [FilterOption::U32].to_vec(), "15".to_string()).U32.contains(&2) );
         }
     }
 
-
-    #[test]
+    // TEST POORLY WRITTEN
+    /*#[test]
     fn SearchProcessTest()
     {
         unsafe
@@ -605,7 +715,7 @@ mod tests
                 windows_sys::Win32::System::Threading::PROCESS_VM_READ |
                 windows_sys::Win32::System::Threading::PROCESS_VM_WRITE,
                 0, // False
-                13632); // Hardcoded process id
+                5816); // Hardcoded process id
 
             let mut result = SearchProcessMemory_Initial(vec![FilterOption::U32], 6, "1".to_string(), process_handle);
             println!("Page matches: {}", &result.len());
@@ -623,5 +733,5 @@ mod tests
 
             assert!(false);
         }
-    }
+    }*/
 }
