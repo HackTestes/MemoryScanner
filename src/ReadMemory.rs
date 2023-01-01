@@ -22,14 +22,15 @@ pub struct PageCopy
 
 // All the addesses for a given type -> there is a u32 at address 15
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct AddressMatch
 {
-    U32: Vec<usize>,
-    U64: Vec<usize>,
-    I32: Vec<usize>,
-    I64: Vec<usize>,
-    F32: Vec<usize>,
-    F64: Vec<usize>
+    pub U32: Vec<usize>,
+    pub U64: Vec<usize>,
+    pub I32: Vec<usize>,
+    pub I64: Vec<usize>,
+    pub F32: Vec<usize>,
+    pub F64: Vec<usize>
 }
 
 impl AddressMatch
@@ -60,8 +61,23 @@ impl AddressMatch
         }
         return false;
     }
+
+    /*pub fn get_all_fields(&self) -> Vec<usize>
+    {
+        let result = Vec::with_capacity(size_of::<usize>() * self.len());
+
+        result.extend_from_slice(self.U32);
+        result.extend_from_slice(self.U64);
+        result.extend_from_slice(self.I32);
+        result.extend_from_slice(self.I64);
+        result.extend_from_slice(self.F32);
+        result.extend_from_slice(self.F64);
+
+        return result;
+    }*/
 }
 
+#[derive(Clone)]
 pub struct MemoryMatches
 {
     page_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION,
@@ -92,7 +108,15 @@ impl MemoryMatches
 
         return virtual_adresses;
     }
+
+    /*pub fn get_all_absolute_virtual_address(&self) -> Vec<usize>
+    {
+        return self.get_absolute_virtual_address().get_all_fields();
+    }*/
 }
+
+unsafe impl Send for MemoryMatches {}
+unsafe impl Sync for MemoryMatches {}
 
 macro_rules! InitialCompareMemoryValue
 {
@@ -318,14 +342,14 @@ pub fn SearchProcessMemory_Initial(filter_list: Vec<FilterOption>, thread_count:
         // Get the copy of the memory region
         let success_code = unsafe{ReadProcessMemory(process_handle, memory_section_info.BaseAddress, Arc::get_mut(&mut memory_region_buffer_arc).unwrap().as_mut_ptr() as *mut c_void, memory_section_info.RegionSize, transfered_bytes_ptr)};
 
-        println!("transfered_bytes: {} -- Base Address: {} -- Region Size: {} -- Buffer.len: {} -- Code: {} -- GetLastError: {}", transfered_bytes, memory_section_info.BaseAddress as usize, memory_section_info.RegionSize, memory_region_buffer_arc.len(), success_code, unsafe{ GetLastError()});
+        //println!("transfered_bytes: {} -- Base Address: {} -- Region Size: {} -- Buffer.len: {} -- Code: {} -- GetLastError: {}", transfered_bytes, memory_section_info.BaseAddress as usize, memory_section_info.RegionSize, memory_region_buffer_arc.len(), success_code, unsafe{ GetLastError()});
 
         // Search for successful attempts only
         if success_code != 0
         {
             let search = InitialMultithreadSearch(&memory_region_buffer_arc, thread_count, filter_list.clone(), target_value.clone());
 
-            println!("Search result: {:?}\n", search);
+            //println!("Search result: {:?}\n", search);
 
             if search.is_empty() != true
             {
@@ -334,8 +358,13 @@ pub fn SearchProcessMemory_Initial(filter_list: Vec<FilterOption>, thread_count:
         }
 
         // Get back to the original size
-        Arc::get_mut(&mut memory_region_buffer_arc).unwrap().resize(initial_buffer_size, 0);
+        if (*memory_region_buffer_arc).capacity() < initial_buffer_size
+        {
+            Arc::get_mut(&mut memory_region_buffer_arc).unwrap().resize(initial_buffer_size, 0);
+        }
+        
     }
+
     return all_pages_matches;
 }
 
@@ -410,11 +439,11 @@ macro_rules! ComparePreviousMatch
 }
 
 // Get the previous results and filter the results by performing a new search
-pub fn FilterMatches(search_results: Vec<MemoryMatches>, filter_list: Vec<FilterOption>, thread_count: usize, target_value: String, process_handle: HANDLE) -> Vec<MemoryMatches>
+pub fn FilterMatches(search_results: &mut Vec<MemoryMatches>, filter_list: Vec<FilterOption>, thread_count: usize, target_value: String, process_handle: HANDLE) -> Vec<MemoryMatches>
 {
     let mut search_previous_results: Vec<MemoryMatches> = vec![];
 
-    for mut page_section in search_results
+    for mut page_section in search_results.into_iter()
     {
         // Get memory copy
         let mut memory_region_copy: Vec<u8> = Vec::with_capacity(page_section.page_info.RegionSize);
@@ -704,8 +733,8 @@ mod tests
         }
     }
 
-    // TEST POORLY WRITTEN
-    /*#[test]
+    /*// TEST POORLY WRITTEN
+    #[test]
     fn SearchProcessTest()
     {
         unsafe
@@ -715,7 +744,7 @@ mod tests
                 windows_sys::Win32::System::Threading::PROCESS_VM_READ |
                 windows_sys::Win32::System::Threading::PROCESS_VM_WRITE,
                 0, // False
-                5816); // Hardcoded process id
+                8680); // Hardcoded process id
 
             let mut result = SearchProcessMemory_Initial(vec![FilterOption::U32], 6, "1".to_string(), process_handle);
             println!("Page matches: {}", &result.len());
