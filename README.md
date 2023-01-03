@@ -32,6 +32,18 @@
 
 - [Windows sys crate documentation](https://docs.rs/windows-sys/0.42.0/windows_sys/)
 
+## Usage
+
+
+```powershell
+MemoryScanner.exe <PROCESS_ID>
+```
+
+You can use 4 commands: search, write, display and exit. Use --help to display the help text.
+```
+command [OPTIONS]
+```
+
 ## Implementation overview
 
 ---
@@ -71,26 +83,8 @@ So, due to increased complexity, this mode will not be supported.
 
 ## Roadmap
 
-20/11
-- [X] Read Memory
-    - [X] Multithreaded search
-        - [X] Initial results
-        - [X] Search on previous results
-    - [X] Select only writable pages
-    - [X] Select multiple data types
-    - [X] Copy pages (per page)
-    - [ ] Copy pages (all pages at once)*
+* Just refactoring work now! It's fully working now!
 
-25/11
-- [ ] Write Memory
-    - [ ] Write value on matched address
-    - [ ] Freeze value
-
-30/11
-- [ ] Command parser
-    - [X] Error checking
-    - [X] Help
-    - [ ] Save previous correct command
-    - [ ] Read memory command
-    - [ ] Write memory command
-    - [ ] Show info on results
+    [ ] Change config field "value_to_search" to "value"
+    [ ] Implementation for a thread pool (performance optimization)
+    [ ] Find a way to reuse search functions (start and filter)
