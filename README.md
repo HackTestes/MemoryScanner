@@ -86,5 +86,7 @@ So, due to increased complexity, this mode will not be supported.
 * Just refactoring work now! It's fully working now!
 
     [ ] Change config field "value_to_search" to "value"
+
     [ ] Implementation for a thread pool (performance optimization)
+    
     [ ] Find a way to reuse search functions (start and filter)
