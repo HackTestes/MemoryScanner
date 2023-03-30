@@ -5,6 +5,8 @@
 #[derive(PartialEq)]
 pub enum FilterOption
 {
+    U8,
+    U16,
     U32,
     U64,
     I32,

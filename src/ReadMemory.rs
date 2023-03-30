@@ -25,6 +25,8 @@ pub struct PageCopy
 #[derive(Clone)]
 pub struct AddressMatch
 {
+    pub U8: Vec<usize>,
+    pub U16: Vec<usize>,
     pub U32: Vec<usize>,
     pub U64: Vec<usize>,
     pub I32: Vec<usize>,
@@ -39,6 +41,8 @@ impl AddressMatch
     {
         return AddressMatch
         {
+            U8: vec![],
+            U16: vec![],
             U32: vec![],
             U64: vec![],
             I32: vec![],
@@ -50,7 +54,7 @@ impl AddressMatch
 
     pub fn len(&self) -> usize
     {
-        return self.U32.len() + self.U64.len() + self.I32.len() + self.I64.len() + self.F32.len() + self.F64.len();
+        return self.U8.len() + self.U16.len() + self.U32.len() + self.U64.len() + self.I32.len() + self.I64.len() + self.F32.len() + self.F64.len();
     }
 
     pub fn is_empty(&self) -> bool
@@ -99,6 +103,8 @@ impl MemoryMatches
     {
         let mut virtual_adresses = AddressMatch::new();
 
+        virtual_adresses.U8 = self.matches.U8.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
+        virtual_adresses.U16 = self.matches.U16.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
         virtual_adresses.U32 = self.matches.U32.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
         virtual_adresses.U64 = self.matches.U64.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
         virtual_adresses.I32 = self.matches.I32.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
@@ -198,6 +204,8 @@ pub unsafe fn InitialMatchMemory(filter_list: Vec<FilterOption>, target_value: S
 
         let result: Vec<usize> = match filter
         {
+            FilterOption::U8 => InitialCompareMemoryValue!( u8, target_value.clone(), &buffer, start, private_region_size ),
+            FilterOption::U16 => InitialCompareMemoryValue!( u16, target_value.clone(), &buffer, start, private_region_size ),
             FilterOption::U32 => InitialCompareMemoryValue!( u32, target_value.clone(), &buffer, start, private_region_size ),
             FilterOption::U64 => InitialCompareMemoryValue!( u64, target_value.clone(), &buffer, start, private_region_size ),
             FilterOption::I32 => InitialCompareMemoryValue!( i32, target_value.clone(), &buffer, start, private_region_size ),
@@ -211,6 +219,8 @@ pub unsafe fn InitialMatchMemory(filter_list: Vec<FilterOption>, target_value: S
         {
             match filter
             {
+                FilterOption::U8 => match_address.U8.extend(result.iter().cloned()),
+                FilterOption::U16 => match_address.U16.extend(result.iter().cloned()),
                 FilterOption::U32 => match_address.U32.extend(result.iter().cloned()),
                 FilterOption::U64 => match_address.U64.extend(result.iter().cloned()),
                 FilterOption::I32 => match_address.I32.extend(result.iter().cloned()),
@@ -246,6 +256,8 @@ pub fn InitialMultithreadSearch(page_copy: &Arc<Vec<u8>>, thread_count: usize, f
     {
         let result = thread.join().unwrap();
 
+        final_result.U8.extend(result.U8.iter().cloned());
+        final_result.U16.extend(result.U16.iter().cloned());
         final_result.U32.extend(result.U32.iter().cloned());
         final_result.U64.extend(result.U64.iter().cloned());
         final_result.I32.extend(result.I32.iter().cloned());
@@ -254,6 +266,12 @@ pub fn InitialMultithreadSearch(page_copy: &Arc<Vec<u8>>, thread_count: usize, f
         final_result.F32.extend(result.F32.iter().cloned());
 
         // Sort and deduplicate results
+        final_result.U8.sort();
+        final_result.U8.dedup();
+
+        final_result.U16.sort();
+        final_result.U16.dedup();
+
         final_result.U32.sort();
         final_result.U32.dedup();
 
@@ -320,7 +338,7 @@ pub fn SearchProcessMemory_Initial(filter_list: Vec<FilterOption>, thread_count:
     // This will reduce the amount of allocations needed
     let initial_buffer_size: usize = 1073741824;
     let mut memory_region_buffer: Vec<u8> = Vec::with_capacity(initial_buffer_size);
-    let mut memory_region_buffer_arc = Arc::new(memory_region_buffer);    
+    let mut memory_region_buffer_arc = Arc::new(memory_region_buffer);
 
     for memory_section_info in all_memory_sections_info
     {
@@ -461,6 +479,8 @@ pub fn FilterMatches(search_results: &mut Vec<MemoryMatches>, filter_list: Vec<F
             // Check if the previous addresses match the new target value 
             let result: Vec<usize> = match filter
             {
+                FilterOption::U8 => ComparePreviousMatch!( u8, target_value.clone(), Arc::clone(&memory_region_copy_arc), std::mem::take(&mut page_section.matches.U8), thread_count),
+                FilterOption::U16 => ComparePreviousMatch!( u16, target_value.clone(), Arc::clone(&memory_region_copy_arc), std::mem::take(&mut page_section.matches.U16), thread_count),
                 FilterOption::U32 => ComparePreviousMatch!( u32, target_value.clone(), Arc::clone(&memory_region_copy_arc), std::mem::take(&mut page_section.matches.U32), thread_count),
                 FilterOption::U64 => ComparePreviousMatch!( u64, target_value.clone(), Arc::clone(&memory_region_copy_arc), std::mem::take(&mut page_section.matches.U64), thread_count),
                 FilterOption::I32 => ComparePreviousMatch!( i32, target_value.clone(), Arc::clone(&memory_region_copy_arc), std::mem::take(&mut page_section.matches.I32), thread_count),
@@ -476,6 +496,8 @@ pub fn FilterMatches(search_results: &mut Vec<MemoryMatches>, filter_list: Vec<F
             {
                 match filter
                 {
+                    FilterOption::U8 => match_address.U8.extend(result.iter().cloned()),
+                    FilterOption::U16 => match_address.U16.extend(result.iter().cloned()),
                     FilterOption::U32 => match_address.U32.extend(result.iter().cloned()),
                     FilterOption::U64 => match_address.U64.extend(result.iter().cloned()),
                     FilterOption::I32 => match_address.I32.extend(result.iter().cloned()),

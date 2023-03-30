@@ -46,6 +46,8 @@ fn WriteIntoProcessMemory_Start(process_handle: HANDLE, result: &Vec<MemoryMatch
     {
         let result_code: i32 = match data_type
         {
+            FilterOption::U8 => WriteProcessMemory!( u8, value.clone(), mem_section.get_absolute_virtual_address().U8, process_handle ),
+            FilterOption::U16 => WriteProcessMemory!( u16, value.clone(), mem_section.get_absolute_virtual_address().U16, process_handle ),
             FilterOption::U32 => WriteProcessMemory!( u32, value.clone(), mem_section.get_absolute_virtual_address().U32, process_handle ),
             FilterOption::U64 => WriteProcessMemory!( u64, value.clone(), mem_section.get_absolute_virtual_address().U64, process_handle ),
             FilterOption::I32 => WriteProcessMemory!( i32, value.clone(), mem_section.get_absolute_virtual_address().I32, process_handle ),

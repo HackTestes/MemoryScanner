@@ -80,6 +80,8 @@ pub fn ParseArg(command: String) -> Result<Configuration, ArgError>
             {
                 match &parameter[..]
                 {
+                    "u8" => filter_list.push(FilterOption::U8),
+                    "u16" => filter_list.push(FilterOption::U16),
                     "u32" => filter_list.push(FilterOption::U32),
                     "u64" => filter_list.push(FilterOption::U64),
                     "i32" => filter_list.push(FilterOption::I32),
