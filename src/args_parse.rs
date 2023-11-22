@@ -88,7 +88,7 @@ pub fn ParseArg(command: String) -> Result<Configuration, ArgError>
                     "i64" => filter_list.push(FilterOption::I64),
                     "f32" => filter_list.push(FilterOption::F32),
                     "f64" => filter_list.push(FilterOption::F64),
-                    _=> eprintln!("Wrong filter type")
+                    _=> {eprintln!("Wrong filter type"); return Err(ArgError::OptionDoesntExist)}
                 }
             }
 
@@ -231,7 +231,7 @@ pub fn ParseArg(command: String) -> Result<Configuration, ArgError>
                     match (argument.action)(&program_args, parameters, &mut config)
                     {
                         Ok(()) => {},
-                        Err(err) => eprintln!("Arg Error: {:?}", err),
+                        Err(err) => {eprintln!("Arg Error: {:?}", err); return Err(err);},
                     }
                 }
             }

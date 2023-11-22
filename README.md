@@ -69,7 +69,7 @@ So, due to increased complexity, this mode will not be supported.
 
 ### Read process memory
 - Serach for values in memory
-    - Use exact values (u32, u64, i32, i64, f32, f64)
+    - Use exact values (u8, u16, u32, u64, i32, i64, f32, f64)
 
 ### Write process memory
 - Write process memory
