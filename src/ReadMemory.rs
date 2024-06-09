@@ -20,7 +20,7 @@ pub struct PageCopy
     memory: Vec<u8>
 }
 
-// All the addesses for a given type -> there is a u32 at address 15
+// All the addresses for a given type. This should represent something like: there is a u32 match at address 15
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct AddressMatch
@@ -103,6 +103,7 @@ impl MemoryMatches
     {
         let mut virtual_adresses = AddressMatch::new();
 
+        // Adds the address of each match (buffer address) to the base address (page address) to get the absolute virtual address
         virtual_adresses.U8 = self.matches.U8.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
         virtual_adresses.U16 = self.matches.U16.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
         virtual_adresses.U32 = self.matches.U32.clone().into_iter().map( |buffer_address| buffer_address+self.page_info.BaseAddress as usize ).collect();
@@ -266,6 +267,7 @@ pub fn InitialMultithreadSearch(page_copy: &Arc<Vec<u8>>, thread_count: usize, f
         final_result.F32.extend(result.F32.iter().cloned());
 
         // Sort and deduplicate results
+        // Dedup needs a sorted array to work correctly
         final_result.U8.sort();
         final_result.U8.dedup();
 
