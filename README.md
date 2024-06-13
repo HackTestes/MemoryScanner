@@ -108,3 +108,13 @@ So, due to increased complexity, this mode will not be supported.
     * [ ] Reduce memory usage
         * Goal: memory allocations can be slow
         * How: remove buffer cloning where possible in the codebase
+
+* Platforms
+
+    * [ ] Add linux support
+        * Security: investigate how to work under [YAMA LSM](https://www.kernel.org/doc/html/v4.15/admin-guide/LSM/Yama.html) without disabling it
+            * Giving root is not ideal
+            * Giving debug caps is essentially root 
+            * Other LSMs might help (AppArmor or SELinux), landlock forbids ptrace
+            * Similar project might help: https://github.com/scanmem/scanmem and https://github.com/ugtrain/ugtrain
+            * Be a parent?
