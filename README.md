@@ -83,10 +83,28 @@ So, due to increased complexity, this mode will not be supported.
 
 ## Roadmap
 
-* Just refactoring work now! It's fully working now!
+* Just refactoring work! It's fully working now!
 
     * [ ] Change config field "value_to_search" to "value"
 
     * [ ] Implementation for a thread pool (performance optimization)
 
     * [ ] Find a way to reuse search functions (start and filter)
+
+* Performance optimization
+
+    * [ ] Use threads pools in the search
+        * Goal: avoid the costs associated to thread creation at every region search (it currently creates threads at every new region)
+
+    * [ ] Use vectorized instructions for searching
+        * Goal: improve the speed of the search hot path
+        * How: Rust's regex engine uses such instructions, so I will use the binary search version
+
+    * [ ] Run the same code for multiple regions
+        * Goal: better exploit the code cache in CPUs to improve speed
+        * How: store multiple regions in a single structure that keeps track of the memory used (size), so the search code will be reutilized withut calling OS APIs and will make it reside in CPUs cache
+        * Sub-goal: make the regions contiguous in memory, allow both the code and data caches to be better exploited
+
+    * [ ] Reduce memory usage
+        * Goal: memory allocations can be slow
+        * How: remove buffer cloning where possible in the codebase
