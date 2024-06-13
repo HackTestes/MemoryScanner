@@ -1,5 +1,6 @@
 // This should be a crate in the future
 
+// TODO! Remove pub in substructures, they should be private
 
 // Implementation of a thread pool to reduce the need of recreating threads all of the time
 // It reduces the cost of thread creation syscall
@@ -19,6 +20,7 @@ use std::mem;
 // ARGS -> structure containing the data that will be used by the function, so it can have the same signature across the threads (function(args) - I can't add parameters dynamically)
 // Also, it allows me to convert a closure to a function as it can't capture any outside values 
 // A possible alternative is using dynamic dispatch(dyn), but I don't want the performance impact
+// RETURN_STRUCT -> structure containing the information returned by the task function
 pub struct TaskTP<ARGS, RETURN_STRUCT>
 {
     arguments_struct: Option<ARGS>,
@@ -38,6 +40,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         };
     }
 
+    // Creates an empty task to inform the worker thread that it can exit now
     pub fn exit() -> TaskTP<ARGS, RETURN_STRUCT>
     {
         return TaskTP
@@ -48,6 +51,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         };
     }
 
+    // Borrow the function pointer - read-only
     fn get_func_ptr(&self) -> Result<&fn(args: ARGS) -> RETURN_STRUCT, String>
     {
         match &self.function_ptr
@@ -57,6 +61,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         }
     }
 
+    // Borrow the args - read-only
     fn get_args(&self) -> Result<&ARGS, String>
     {
         match &self.arguments_struct
@@ -66,10 +71,12 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         }
     }
 
+    // Takes ownsership of the arguments, consuming them (aka leaving None in the structure)
     fn take_args(&mut self) -> Result<ARGS, String>
     {
         let arguments: Option<ARGS> =  mem::take(&mut self.arguments_struct);
         
+        // Extract the args
         match arguments
         {
             Some(args) => return Ok(args),
@@ -84,7 +91,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
 pub struct ThreadTP<ARGS, RETURN_STRUCT>
 {
     handle: Option< thread::JoinHandle<Result<(), String>> >,
-    assigned: bool,
+    assigned: bool, // Did main send a task?
 
     // Main sends tasks, worker receives them
     task_queue_sender: mpsc::Sender< TaskTP<ARGS, RETURN_STRUCT> >,
@@ -113,6 +120,7 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
         };
     }
 
+    // Borrow thread handle - read-only
     fn get_handle(&self) -> &thread::JoinHandle<Result<(), String>>
     {
         match &self.handle
@@ -122,6 +130,7 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
         }
     }
 
+    // Takes ownsership of the receiver of the task queue, leaving None in the palce
     fn take_worker_task_receiver(&mut self) -> mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>>
     {
         let receiver: Option< mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>> > =  mem::take(&mut self.task_queue_receiver);
@@ -133,6 +142,8 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
         }
     }
 
+    // Takes ownsership of the sender of the resukt queue, leaving None
+    // Main doesn't send any results, so the worker can have full ownsership 
     fn take_worker_result_sender(&mut self) -> mpsc::Sender<RETURN_STRUCT>
     {
         let sender: Option< mpsc::Sender<RETURN_STRUCT> > = mem::take(&mut self.result_queue_sender);
@@ -145,12 +156,13 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
     }
 }
 
-
+// The actual pool, it controls all other substructures
 pub struct ThreadPool<ARGS, RETURN_STRUCT>
 {
     thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> >,
 }
 
+// Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
 impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
 {
     pub fn new(num_threads: usize) -> ThreadPool<ARGS, RETURN_STRUCT>
@@ -160,10 +172,10 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
 
         for idx in 0..num_threads
         {
-            // Thread store - this should be shared between the main thread and 1 worker
+            // Thread - contains general information about the thread
             let mut thread = ThreadTP::<ARGS, RETURN_STRUCT>::new();
 
-            // Private reference for each thread for the store
+            // Private reference for each thread
             let thread_task_rcv = thread.take_worker_task_receiver();
             let thread_result_sender = thread.take_worker_result_sender();
 
@@ -177,6 +189,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
                         // Is main asking to exit?
                         if task.exit == true
                         {
+                            // If so, return
                             return Ok(());
                         }
 
@@ -205,6 +218,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
     pub fn execute(&mut self, thread_id: usize, args: ARGS, task: fn(args: ARGS) -> RETURN_STRUCT) -> Result<(), String>
     {
 
+        // One should not send tasks to already assinged threads
         if self.thread_list[thread_id].assigned == true
         {
             return Err("Thread already has a task assigned to it".to_string());
@@ -252,39 +266,23 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
     {
         // Send the exit command to all threads
         // There is no need to wait for any of them
-    
+        // Calling join is possible, but would require the main to wait (reducing performance unnecessarily)
         for thread_id in 0..self.thread_list.len()
         {
-            // Unpark all idle threads
+            // Wake up all idle threads
+            // Threads that have some work will continue to do so. When they finish, they will see a new task and exit
+            // Also, we can safely ignore the assigned field
             self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() );
         }
     }
 }
 
 
-
-// QA
-// How do I wait on individual threads in the pool?
-// You don't. You should create many pools with a single thread and wait for them insted. This makes my implementation simplier, otherwise I would need to create a function to wait for a single one and for all (which will also require the threads to sync to different things).
-// For example: I can wait on multiple condvars (with mutexes) for each thread in the pool, or I can simply use a barrier, or worse wait condiotionally on barriers or condvars. I find the barrier much more pleasant.
-
-// It is not possible to use barriers, destroy might deadlock
+// It is not possible to use barriers in this particular implementation, destroy might deadlock if only some threads were assigned work (pool of 10, only 5 have work)
 // Picture this situation:
 // some threads have some tasks --> blocked at barrier wait : to resume all other threads must rendevousz at barrier wait
 // threads without tasks --> blocked at park : to resume we call unpark
 
-// ThreadPool_v2
-// This versions uses mutexes and condvars to notify the main thread
-// Its porpuse is to control threads in a more fine grained way (individually or as a custom group)
-
-// Actions
-// Create a pool with a certain number of threads
-// Execute tasks in individual threads
-// Wait for all threads to finish
-// Wait for a list of threads to finish
-// Add new threads to the pool
-// Remove threads from the pool
-// Destroy pool
 
 // Unit test
 #[cfg(test)]
