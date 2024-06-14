@@ -109,6 +109,9 @@ So, due to increased complexity, this mode will not be supported.
         * Goal: memory allocations can be slow
         * How: remove buffer cloning where possible in the codebase
 
+* Modules
+    * [ ] Test moving closure API for thread pool (see TODO!)
+
 * Platforms
 
     * [ ] Add linux support
@@ -118,3 +121,9 @@ So, due to increased complexity, this mode will not be supported.
             * Other LSMs might help (AppArmor or SELinux), landlock forbids ptrace
             * Similar project might help: https://github.com/scanmem/scanmem and https://github.com/ugtrain/ugtrain
             * Be a parent?
+
+            * Alternative: run as root, but setup a seccomp filter that only allows to trace a specific PID
+                * Linux might have problems as PID are reused for different processes
+
+            * Alternative: BPF LSM
+                * Setup a rule that checks ptrace target name (process name)

@@ -1,6 +1,9 @@
 // This should be a crate in the future
 
 // TODO! Remove pub in substructures, they should be private
+// TODO! Test a new API that accepts moving closures insted of the current one that unpacks a struct ARG
+//      This should make the pool API closer to other Rust's thread APIs
+//      It should also allow different types of arguments for different tasks in the same pool
 
 // Implementation of a thread pool to reduce the need of recreating threads all of the time
 // It reduces the cost of thread creation syscall
@@ -142,7 +145,7 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
         }
     }
 
-    // Takes ownsership of the sender of the resukt queue, leaving None
+    // Takes ownsership of the sender of the result queue, leaving None
     // Main doesn't send any results, so the worker can have full ownsership 
     fn take_worker_result_sender(&mut self) -> mpsc::Sender<RETURN_STRUCT>
     {
@@ -258,8 +261,6 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
     }
 }
 
-
-
 impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
 {
     fn drop(&mut self)
@@ -267,6 +268,7 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
         // Send the exit command to all threads
         // There is no need to wait for any of them
         // Calling join is possible, but would require the main to wait (reducing performance unnecessarily)
+        // Therefore, all threads will be implicitly detached
         for thread_id in 0..self.thread_list.len()
         {
             // Wake up all idle threads
