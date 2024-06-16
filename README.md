@@ -110,7 +110,8 @@ So, due to increased complexity, this mode will not be supported.
         * How: remove buffer cloning where possible in the codebase
 
 * Modules
-    * [ ] Test moving closure API for thread pool (see TODO!)
+    * [ ] Test moving closure API for thread pool
+        * Attention: for some reason, the closure implementation is slightly slower... Maybe the args copy trait could be a bottleneck??? And yes, this is consistent.
 
 * Platforms
 
