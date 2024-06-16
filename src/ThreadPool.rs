@@ -4,6 +4,17 @@
 // TODO! Test a new API that accepts moving closures insted of the current one that unpacks a struct ARG
 //      This should make the pool API closer to other Rust's thread APIs
 //      It should also allow different types of arguments for different tasks in the same pool
+// TODO! Investigate variadic fuctions API
+
+/*
+# Considerations
+
+    ## Moving closure API
+
+    It is bound to be slower, because moving closures requires Fn() or FnOnce() and they require dyn (dinamic dispatch). It might also require Box to be able to store the pointer it into a struct. I have also made tests to verify if it was slower and I was able to confirm it (slightly slower).
+    
+    Since I don't belive this style of API brings any benefits, moving closures won't be supported.
+*/
 
 // Implementation of a thread pool to reduce the need of recreating threads all of the time
 // It reduces the cost of thread creation syscall
