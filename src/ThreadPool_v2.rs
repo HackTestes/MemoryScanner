@@ -24,38 +24,35 @@ use std::mem;
 // Also, it allows me to convert a closure to a function as it can't capture any outside values 
 // A possible alternative is using dynamic dispatch(dyn), but I don't want the performance impact
 // RETURN_STRUCT -> structure containing the information returned by the task function
-pub struct TaskTP<ARGS: Copy, RETURN_STRUCT>
+pub struct TaskTP<RETURN_STRUCT>
 {
-    arguments_struct: Option<ARGS>,
-    function_ptr: Option< Box<dyn Fn(ARGS) -> RETURN_STRUCT> >,
+    function_ptr: Option< Box<dyn Fn() -> RETURN_STRUCT> >,
     exit: bool // Used when terminating the pool instance
 }
 
-impl<ARGS: Copy, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT> TaskTP<RETURN_STRUCT>
 {
-    pub fn new(args: ARGS, function: impl Fn(ARGS) -> RETURN_STRUCT + 'static) -> TaskTP<ARGS, RETURN_STRUCT>
+    pub fn new(function: impl Fn() -> RETURN_STRUCT + 'static) -> TaskTP<RETURN_STRUCT>
     {
         return TaskTP
         {
-            arguments_struct: Some(args),
             function_ptr: Some(Box::new(function)),
             exit: false
         };
     }
 
     // Creates an empty task to inform the worker thread that it can exit now
-    pub fn exit() -> TaskTP<ARGS, RETURN_STRUCT>
+    pub fn exit() -> TaskTP<RETURN_STRUCT>
     {
         return TaskTP
         {
-            arguments_struct: None,
             function_ptr: None,
             exit: true
         };
     }
 
     // Borrow the function pointer - read-only
-    fn get_func_ptr(&self) -> Result<&dyn Fn(ARGS) -> RETURN_STRUCT, String>
+    fn get_func_ptr(&self) -> Result<&dyn Fn() -> RETURN_STRUCT, String>
     {
         match &self.function_ptr
         {
@@ -64,54 +61,32 @@ impl<ARGS: Copy, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         }
     }
 
-    // Borrow the args - read-only
-    fn get_args(&self) -> Result<&ARGS, String>
-    {
-        match &self.arguments_struct
-        {
-            Some(args) => return Ok(args),
-            None => Err("No arguments present".to_string()),
-        }
-    }
-
-    // Takes ownsership of the arguments, consuming them (aka leaving None in the structure)
-    fn take_args(&mut self) -> Result<ARGS, String>
-    {
-        let arguments: Option<ARGS> = mem::take(&mut self.arguments_struct);
-        
-        // Extract the args
-        match arguments
-        {
-            Some(args) => return Ok(args),
-            None => todo!()
-        }
-    }
 }
 
-unsafe impl<ARGS: Copy, RETURN_STRUCT> Send for TaskTP<ARGS, RETURN_STRUCT>{}
+unsafe impl<RETURN_STRUCT> Send for TaskTP<RETURN_STRUCT>{}
 
 
 // Thread from Thread Pool
 // It represents a single thread in the pool
-pub struct ThreadTP<ARGS: Copy, RETURN_STRUCT>
+pub struct ThreadTP<RETURN_STRUCT>
 {
     handle: Option< thread::JoinHandle<Result<(), String>> >,
     assigned: bool, // Did main send a task?
 
     // Main sends tasks, worker receives them
-    task_queue_sender: mpsc::Sender< TaskTP<ARGS, RETURN_STRUCT> >,
-    task_queue_receiver: Option< mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>> >,
+    task_queue_sender: mpsc::Sender< TaskTP<RETURN_STRUCT> >,
+    task_queue_receiver: Option< mpsc::Receiver< TaskTP<RETURN_STRUCT>> >,
 
     // Worker sends results, main receives them
     result_queue_sender: Option< mpsc::Sender<RETURN_STRUCT> >,
     result_queue_receiver: mpsc::Receiver<RETURN_STRUCT>
 }
 
-impl<ARGS: Copy, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT> ThreadTP<RETURN_STRUCT>
 {
-    fn new() -> ThreadTP<ARGS, RETURN_STRUCT>
+    fn new() -> ThreadTP<RETURN_STRUCT>
     {
-        let (task_s, task_r) = mpsc::channel::< TaskTP<ARGS, RETURN_STRUCT> >();
+        let (task_s, task_r) = mpsc::channel::< TaskTP<RETURN_STRUCT> >();
         let (result_s, result_r) = mpsc::channel::<RETURN_STRUCT>();
 
         return ThreadTP
@@ -136,9 +111,9 @@ impl<ARGS: Copy, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
     }
 
     // Takes ownsership of the receiver of the task queue, leaving None in the palce
-    fn take_worker_task_receiver(&mut self) -> mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>>
+    fn take_worker_task_receiver(&mut self) -> mpsc::Receiver< TaskTP<RETURN_STRUCT>>
     {
-        let receiver: Option< mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>> > =  mem::take(&mut self.task_queue_receiver);
+        let receiver: Option< mpsc::Receiver< TaskTP<RETURN_STRUCT>> > =  mem::take(&mut self.task_queue_receiver);
         
         match receiver
         {
@@ -162,23 +137,23 @@ impl<ARGS: Copy, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
 }
 
 // The actual pool, it controls all other substructures
-pub struct ThreadPool<ARGS: Copy, RETURN_STRUCT>
+pub struct ThreadPool<RETURN_STRUCT>
 {
-    thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> >,
+    thread_list: Vec< ThreadTP<RETURN_STRUCT> >,
 }
 
 // Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
-impl<ARGS: Send + 'static + Copy, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT: Send + 'static> ThreadPool<RETURN_STRUCT>
 {
-    pub fn new(num_threads: usize) -> ThreadPool<ARGS, RETURN_STRUCT>
+    pub fn new(num_threads: usize) -> ThreadPool<RETURN_STRUCT>
     {
         // Thread list - holds the handles to each thread
-        let mut new_thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> > = Vec::new();
+        let mut new_thread_list: Vec< ThreadTP<RETURN_STRUCT> > = Vec::new();
 
         for idx in 0..num_threads
         {
             // Thread - contains general information about the thread
-            let mut thread = ThreadTP::<ARGS, RETURN_STRUCT>::new();
+            let mut thread = ThreadTP::<RETURN_STRUCT>::new();
 
             // Private reference for each thread
             let thread_task_rcv = thread.take_worker_task_receiver();
@@ -199,7 +174,7 @@ impl<ARGS: Send + 'static + Copy, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS
                         }
 
                         // Execute the task sent
-                        let results = ( task.get_func_ptr().unwrap() )( *task.get_args().unwrap() );
+                        let results = ( task.get_func_ptr().unwrap() )();
 
                         // Send the return values back to main. It should also wake it up, if it is waiting
                         thread_result_sender.send(results).unwrap();
@@ -220,7 +195,7 @@ impl<ARGS: Send + 'static + Copy, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS
     }
 
 
-    pub fn execute(&mut self, thread_id: usize, args: ARGS, task: impl Fn(ARGS) -> RETURN_STRUCT + 'static) -> Result<(), String>
+    pub fn execute(&mut self, thread_id: usize, task: impl Fn() -> RETURN_STRUCT + 'static) -> Result<(), String>
     {
 
         // One should not send tasks to already assinged threads
@@ -230,7 +205,7 @@ impl<ARGS: Send + 'static + Copy, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS
         }
 
         // Sends a task to the thread
-        self.thread_list[thread_id].task_queue_sender.send( TaskTP::new(args, task) );
+        self.thread_list[thread_id].task_queue_sender.send( TaskTP::new(task) );
 
         // Keep track that it has been started by main
         self.thread_list[thread_id].assigned = true;
@@ -263,7 +238,7 @@ impl<ARGS: Send + 'static + Copy, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS
     }
 }
 
-impl<ARGS: Copy, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT> Drop for ThreadPool<RETURN_STRUCT>
 {
     fn drop(&mut self)
     {
@@ -306,12 +281,12 @@ mod tests
                 return arg;
             }
 
-            let mut thread_pool = ThreadPool::<i32, i32>::new(1);
+            let mut thread_pool = ThreadPool::<i32>::new(1);
 
             let mut now = time::Instant::now();
             for idx in 0..num_tasks
             {
-                let _ = thread_pool.execute(0 as usize, 1, move|arg: i32| -> i32
+                let _ = thread_pool.execute(0 as usize, move|| -> i32
                 {
                     return idx as i32;
                 });

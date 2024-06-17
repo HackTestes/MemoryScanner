@@ -37,38 +37,47 @@ use std::mem;
 // Also, it allows me to convert a closure to a function as it can't capture any outside values 
 // A possible alternative is using dynamic dispatch(dyn), but I don't want the performance impact
 // RETURN_STRUCT -> structure containing the information returned by the task function
-pub struct TaskTP<ARGS, RETURN_STRUCT>
+pub struct TaskTP<RETURN_STRUCT>
 {
-    arguments_struct: Option<ARGS>,
-    function_ptr: Option< fn(args: ARGS) -> RETURN_STRUCT >,
+    arg1: Option<i32>,
+    arg2: Option<i32>,
+    arg3: Option<i32>,
+    arg4: Option<i32>,
+    function_ptr: Option< fn(arg1: i32, arg2: i32, arg3: i32, arg4: i32) -> RETURN_STRUCT >,
     exit: bool // Used when terminating the pool instance
 }
 
-impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT> TaskTP<RETURN_STRUCT>
 {
-    pub fn new(args: ARGS, function: fn(args: ARGS) -> RETURN_STRUCT) -> TaskTP<ARGS, RETURN_STRUCT>
+    pub fn new(arg1: i32, arg2: i32, arg3: i32, arg4: i32, function: fn(arg1: i32, arg2: i32, arg3: i32, arg4: i32) -> RETURN_STRUCT) -> TaskTP<RETURN_STRUCT>
     {
         return TaskTP
         {
-            arguments_struct: Some(args),
+            arg1: Some(arg1),
+            arg2: Some(arg2),
+            arg3: Some(arg3),
+            arg4: Some(arg4),
             function_ptr: Some(function),
             exit: false
         };
     }
 
     // Creates an empty task to inform the worker thread that it can exit now
-    pub fn exit() -> TaskTP<ARGS, RETURN_STRUCT>
+    pub fn exit() -> TaskTP<RETURN_STRUCT>
     {
         return TaskTP
         {
-            arguments_struct: None,
+            arg1: None,
+            arg2: None,
+            arg3: None,
+            arg4: None,
             function_ptr: None,
             exit: true
         };
     }
 
     // Borrow the function pointer - read-only
-    fn get_func_ptr(&self) -> Result<&fn(args: ARGS) -> RETURN_STRUCT, String>
+    fn get_func_ptr(&self) -> Result<&fn(arg1: i32, arg2: i32, arg3: i32, arg4: i32) -> RETURN_STRUCT, String>
     {
         match &self.function_ptr
         {
@@ -77,6 +86,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         }
     }
 
+    /*
     // Borrow the args - read-only
     fn get_args(&self) -> Result<&ARGS, String>
     {
@@ -99,30 +109,31 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
             None => todo!()
         }
     }
+    */
 }
 
 
 // Thread from Thread Pool
 // It represents a single thread in the pool
-pub struct ThreadTP<ARGS, RETURN_STRUCT>
+pub struct ThreadTP<RETURN_STRUCT>
 {
     handle: Option< thread::JoinHandle<Result<(), String>> >,
     assigned: bool, // Did main send a task?
 
     // Main sends tasks, worker receives them
-    task_queue_sender: mpsc::Sender< TaskTP<ARGS, RETURN_STRUCT> >,
-    task_queue_receiver: Option< mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>> >,
+    task_queue_sender: mpsc::Sender< TaskTP<RETURN_STRUCT> >,
+    task_queue_receiver: Option< mpsc::Receiver< TaskTP<RETURN_STRUCT>> >,
 
     // Worker sends results, main receives them
     result_queue_sender: Option< mpsc::Sender<RETURN_STRUCT> >,
     result_queue_receiver: mpsc::Receiver<RETURN_STRUCT>
 }
 
-impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT> ThreadTP<RETURN_STRUCT>
 {
-    fn new() -> ThreadTP<ARGS, RETURN_STRUCT>
+    fn new() -> ThreadTP<RETURN_STRUCT>
     {
-        let (task_s, task_r) = mpsc::channel::< TaskTP<ARGS, RETURN_STRUCT> >();
+        let (task_s, task_r) = mpsc::channel::< TaskTP<RETURN_STRUCT> >();
         let (result_s, result_r) = mpsc::channel::<RETURN_STRUCT>();
 
         return ThreadTP
@@ -147,9 +158,9 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
     }
 
     // Takes ownsership of the receiver of the task queue, leaving None in the palce
-    fn take_worker_task_receiver(&mut self) -> mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>>
+    fn take_worker_task_receiver(&mut self) -> mpsc::Receiver< TaskTP<RETURN_STRUCT>>
     {
-        let receiver: Option< mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>> > =  mem::take(&mut self.task_queue_receiver);
+        let receiver: Option< mpsc::Receiver< TaskTP<RETURN_STRUCT>> > =  mem::take(&mut self.task_queue_receiver);
         
         match receiver
         {
@@ -173,23 +184,23 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
 }
 
 // The actual pool, it controls all other substructures
-pub struct ThreadPool<ARGS, RETURN_STRUCT>
+pub struct ThreadPool<RETURN_STRUCT>
 {
-    thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> >,
+    thread_list: Vec< ThreadTP<RETURN_STRUCT> >,
 }
 
 // Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
-impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT: Send + 'static> ThreadPool<RETURN_STRUCT>
 {
-    pub fn new(num_threads: usize) -> ThreadPool<ARGS, RETURN_STRUCT>
+    pub fn new(num_threads: usize) -> ThreadPool<RETURN_STRUCT>
     {
         // Thread list - holds the handles to each thread
-        let mut new_thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> > = Vec::new();
+        let mut new_thread_list: Vec< ThreadTP<RETURN_STRUCT> > = Vec::new();
 
         for idx in 0..num_threads
         {
             // Thread - contains general information about the thread
-            let mut thread = ThreadTP::<ARGS, RETURN_STRUCT>::new();
+            let mut thread = ThreadTP::<RETURN_STRUCT>::new();
 
             // Private reference for each thread
             let thread_task_rcv = thread.take_worker_task_receiver();
@@ -210,7 +221,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
                         }
 
                         // Execute the task sent
-                        let results = ( task.get_func_ptr().unwrap() )( task.take_args().unwrap() );
+                        let results = ( task.get_func_ptr().unwrap() )( task.arg1.unwrap(), task.arg2.unwrap(), task.arg3.unwrap(), task.arg4.unwrap() );
 
                         // Send the return values back to main. It should also wake it up, if it is waiting
                         thread_result_sender.send(results).unwrap();
@@ -231,7 +242,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
     }
 
 
-    pub fn execute(&mut self, thread_id: usize, args: ARGS, task: fn(args: ARGS) -> RETURN_STRUCT) -> Result<(), String>
+    pub fn execute(&mut self, thread_id: usize, arg1: i32, arg2: i32, arg3: i32, arg4: i32, task: fn(arg1: i32, arg2: i32, arg3: i32, arg4: i32) -> RETURN_STRUCT) -> Result<(), String>
     {
 
         // One should not send tasks to already assinged threads
@@ -241,7 +252,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
         }
 
         // Sends a task to the thread
-        self.thread_list[thread_id].task_queue_sender.send( TaskTP::new(args, task) );
+        self.thread_list[thread_id].task_queue_sender.send( TaskTP::new(arg1, arg2, arg3, arg4, task) );
 
         // Keep track that it has been started by main
         self.thread_list[thread_id].assigned = true;
@@ -274,7 +285,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
     }
 }
 
-impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
+impl<RETURN_STRUCT> Drop for ThreadPool<RETURN_STRUCT>
 {
     fn drop(&mut self)
     {
@@ -303,192 +314,7 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
 #[cfg(test)]
 mod tests
 {
-    use crate::ThreadPool::*;
-
-    #[ignore]
-    #[test]
-    fn ThreadPoolTest()
-    {
-        fn task_func(args: i32) -> i32
-        {
-            println!("Hello from thread task");
-            return args.clone();
-        }
-
-        let mut thread_list: Vec< ThreadTP<i32, i32> >= Vec::new();
-
-        for idx in 0..5
-        {
-            let task = TaskTP::<i32, i32>::new(1, task_func);
-
-            println!("Task Object \nArgs: {} \nFunc: {:?} \nExit: {}", task.get_args().unwrap(), task.get_func_ptr().unwrap(), task.exit);
-            println!("\n\n\n");
-
-            let mut thread = ThreadTP::<i32, i32>::new();
-
-            println!("ThreadTP Object \nHandle: {:?} \nAssigned: {} \nTaskSender: {:?} \nTaskReceiver: {:?} \nResultSender: {:?} \nResultReceiver: {:?}",
-            thread.handle,
-            thread.assigned,
-            thread.task_queue_sender,
-            thread.task_queue_receiver,
-            thread.result_queue_sender,
-            thread.result_queue_receiver,
-            );
-            println!("\n\n\n");
-            
-
-            // Send the task
-            thread.task_queue_sender.send(task);
-
-            // Setup thread
-            let thread_task_rcv = thread.take_worker_task_receiver();
-
-            let thread_handle = thread::spawn(move|| -> Result<(), String>
-                {
-                    loop
-                    {
-                        //let received_task = task_r.recv().unwrap();
-                        let mut received_task = thread_task_rcv.recv().unwrap();
-
-                        if received_task.exit == true
-                        {
-                            return Ok(());
-                        }
-
-                        println!("Task Object \nArgs: {} \nFunc: {:?} \nExit: {}", received_task.get_args().unwrap(), received_task.get_func_ptr().unwrap(), received_task.exit);
-                        println!("\n\n\n");
-
-                        ( received_task.get_func_ptr().unwrap() )( received_task.take_args().unwrap() );
-                    }
-                });
-
-            thread.handle = Some(thread_handle);
-
-            thread_list.push(thread);
-        }
-
-        for idx in 0..5
-        {
-            let thread = thread_list.pop().unwrap();
-            thread.task_queue_sender.send(TaskTP::<i32, i32>::exit());
-            thread.handle.unwrap().join();
-        }
-
-        assert_eq!(false,true);
-    }
-
-    #[ignore]
-    #[test]
-    fn TestPool()
-    {
-        use::std::time;
-        {
-            let num_threads: usize = 10;
-            let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads);
-
-            fn task(arg: (i32, i32)) -> i32
-            {
-                let (arg1, arg2) = arg; 
-                println!("Hello from task! Args: {:?}", arg);
-                return arg1;
-            }
-
-            for idx in 0..num_threads
-            {
-                thread_pool.execute(idx, (idx as i32, idx as i32), task);
-            }
-
-            let all_results = thread_pool.wait_all();
-            println!("Results: {:?}", all_results);
-
-            for idx in 0..num_threads
-            {
-                thread_pool.execute(idx, ((idx+num_threads-1) as i32, idx as i32), task);
-            }
-
-            let all_results = thread_pool.wait_all();
-            println!("Results: {:?}", all_results);
-        }
-
-        thread::sleep(time::Duration::from_millis(1000));
-
-        assert_eq!(false,true);
-    }
-
-    #[ignore]
-    #[test]
-    fn TestPoolArgsLeak()
-    {
-        use::std::time;
-        {
-            let mut thread_pool = ThreadPool::<Vec<u8>, i32>::new(1);
-
-            fn task(arg: Vec<u8>) -> i32
-            { 
-                return 0;
-            }
-
-            loop
-            {
-                let vector: Vec<u8> = vec![1; 1*1024*1024];
-
-                let _ = thread_pool.execute(0 as usize, vector, task);
-                let all_results = thread_pool.wait_all();
-            }
-
-            thread::sleep(time::Duration::from_millis(10000));
-        }
-        assert_eq!(false,true);
-    }
-
-
-    #[ignore]
-    #[test]
-    fn TestPoolReturnLeak()
-    {
-        use::std::time;
-        {
-            let mut thread_pool = ThreadPool::<i32, Vec<u8>>::new(1);
-
-            fn task(arg: i32) -> Vec<u8>
-            { 
-                let vector: Vec<u8> = vec![1; 1*1024*1024];
-                return vector;
-            }
-
-            loop
-            {
-                let _ = thread_pool.execute(0 as usize, 1, task);
-                let all_results = thread_pool.wait_all();
-            }
-
-            //thread::sleep(time::Duration::from_millis(10000));
-        }
-        assert_eq!(false,true);
-    }
-
-    #[ignore]
-    #[test]
-    fn TestPoolCreationLeak()
-    {
-        use::std::time;
-        {
-            fn task(arg: i32) -> i32
-            { 
-                return arg;
-            }
-
-            loop
-            {
-                let mut thread_pool = ThreadPool::<i32, i32>::new(1);
-                let _ = thread_pool.execute(0 as usize, 1, task);
-                let all_results = thread_pool.wait_all();
-            }
-
-            //thread::sleep(time::Duration::from_millis(10000));
-        }
-        assert_eq!(false,true);
-    }
+    use crate::ThreadPool_v3::*;
 
     #[test]
     fn TestPoolPerformanceMeasure()
@@ -497,58 +323,22 @@ mod tests
         {
             let num_tasks: usize = 1000000;
 
-            fn task(arg: (i32, i32, i32, i32)) -> i32
-            {
-                return arg.0;
+            fn task(arg1: i32, arg2: i32, arg3: i32, arg4: i32) -> i32
+            { 
+                return arg1;
             }
 
-            let mut thread_pool = ThreadPool::<(i32, i32, i32, i32), i32>::new(1);
+            let mut thread_pool = ThreadPool::<i32>::new(1);
 
             let mut now = time::Instant::now();
             for _ in 0..num_tasks
             {
-                let _ = thread_pool.execute(0 as usize, (1, 2, 3, 4), task);
+                let _ = thread_pool.execute(0 as usize, 1, 2, 3, 4, task);
                 let all_results = thread_pool.wait_all();
             }
             let thread_pool_time_elapsed = now.elapsed().as_millis();
-            println!("Thread pool time elapsed: {}ms", thread_pool_time_elapsed);
-            println!("Thread pool, tasks p/ milisec: {}t/ms", num_tasks/thread_pool_time_elapsed as usize);
-
-            /*
-            now = time::Instant::now();
-            for _ in 0..num_tasks
-            {
-                let thread_arg = 1;
-                let thread_handle = thread::spawn(move ||
-                    {
-                        return task(thread_arg);
-                    });
-
-                let all_results = thread_handle.join();
-            }
-            let thread_spawn_time_elapsed = now.elapsed().as_millis();
-            println!("Thread spwan time elapsed: {}ms", thread_spawn_time_elapsed);
-            println!("Thread spawn, tasks p/ milisec: {}t/ms", num_tasks/thread_spawn_time_elapsed as usize);
-            */
-
-            /*
-            now = time::Instant::now();
-            for _ in 0..num_tasks
-            {
-                let thread_arg = 1;
-                let all_results = thread::scope(|s|
-                    {
-                        s.spawn(move||
-                            {
-                                return task(thread_arg);
-                            });
-                    });
-
-            }
-            let thread_scope_time_elapsed = now.elapsed().as_millis();
-            println!("Scoped Thread time elapsed: {}ms", thread_scope_time_elapsed);
-            println!("Scoped Thread, tasks p/ milisec: {}t/ms", num_tasks/thread_scope_time_elapsed as usize);
-            */
+            println!("Thread pool variadic time elapsed: {}ms", thread_pool_time_elapsed);
+            println!("Thread pool variadic, tasks p/ milisec: {}t/ms", num_tasks/thread_pool_time_elapsed as usize);
 
         }
         assert_eq!(false,true);
