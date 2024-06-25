@@ -88,6 +88,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
     }
 
     // Takes ownsership of the arguments, consuming them (aka leaving None in the structure)
+    // This is done so partial moving does not invalidate the whole object
     fn take_args(&mut self) -> Result<ARGS, String>
     {
         let arguments: Option<ARGS> =  mem::take(&mut self.arguments_struct);
