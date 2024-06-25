@@ -1,10 +1,6 @@
 // This should be a crate in the future
 
 // TODO! Remove pub in substructures, they should be private
-// TODO! Test a new API that accepts moving closures insted of the current one that unpacks a struct ARG
-//      This should make the pool API closer to other Rust's thread APIs
-//      It should also allow different types of arguments for different tasks in the same pool
-// TODO! Investigate variadic fuctions API
 
 /*
 # Considerations
@@ -13,9 +9,13 @@
 
     It is bound to be slower, because moving closures requires Fn() or FnOnce() and they require dyn (dinamic dispatch). It might also require Box to be able to store the pointer it into a struct. I have also made tests to verify if it was slower and I was able to confirm it (slightly slower).
 
-    Another point, the clusure required some unsafe code.
+    Another point, the clusure required some amount of unsafe code.
     
-    Since I don't belive this style of API brings any benefits, moving closures won't be supported. It could me my implementation, but this was my best.
+    Since I don't belive this style of API brings any benefits, moving closures won't be supported. It could be that my implementation was bad, but this was the best I could do.
+
+    ## Variadic API
+
+    Performance was identical to the one used here, but it required some usafe code and it was'nt ergonomic (it would need the use os macros). Since I like the current API and variadic did't bring any benefits, it won't be supportted.
 */
 
 // Implementation of a thread pool to reduce the need of recreating threads all of the time
@@ -37,7 +37,7 @@ use std::mem;
 // Also, it allows me to convert a closure to a function as it can't capture any outside values 
 // A possible alternative is using dynamic dispatch(dyn), but I don't want the performance impact
 // RETURN_STRUCT -> structure containing the information returned by the task function
-pub struct TaskTP<ARGS, RETURN_STRUCT>
+struct TaskTP<ARGS, RETURN_STRUCT>
 {
     arguments_struct: Option<ARGS>,
     function_ptr: Option< fn(args: ARGS) -> RETURN_STRUCT >,
@@ -46,7 +46,7 @@ pub struct TaskTP<ARGS, RETURN_STRUCT>
 
 impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
 {
-    pub fn new(args: ARGS, function: fn(args: ARGS) -> RETURN_STRUCT) -> TaskTP<ARGS, RETURN_STRUCT>
+    fn new(args: ARGS, function: fn(args: ARGS) -> RETURN_STRUCT) -> TaskTP<ARGS, RETURN_STRUCT>
     {
         return TaskTP
         {
@@ -57,7 +57,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
     }
 
     // Creates an empty task to inform the worker thread that it can exit now
-    pub fn exit() -> TaskTP<ARGS, RETURN_STRUCT>
+    fn exit() -> TaskTP<ARGS, RETURN_STRUCT>
     {
         return TaskTP
         {
@@ -104,7 +104,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
 
 // Thread from Thread Pool
 // It represents a single thread in the pool
-pub struct ThreadTP<ARGS, RETURN_STRUCT>
+struct ThreadTP<ARGS, RETURN_STRUCT>
 {
     handle: Option< thread::JoinHandle<Result<(), String>> >,
     assigned: bool, // Did main send a task?
@@ -299,122 +299,121 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
 // threads without tasks --> blocked at park : to resume we call unpark
 
 
-// Unit test
+// Unit tests
+// They will also be used to show some ways to use the thread pool, so you can use it as a tutorial of sorts
 #[cfg(test)]
 mod tests
 {
+    // Import the current module to all tests
     use crate::ThreadPool::*;
 
-    #[ignore]
-    #[test]
-    fn ThreadPoolTest()
-    {
-        fn task_func(args: i32) -> i32
-        {
-            println!("Hello from thread task");
-            return args.clone();
-        }
-
-        let mut thread_list: Vec< ThreadTP<i32, i32> >= Vec::new();
-
-        for idx in 0..5
-        {
-            let task = TaskTP::<i32, i32>::new(1, task_func);
-
-            println!("Task Object \nArgs: {} \nFunc: {:?} \nExit: {}", task.get_args().unwrap(), task.get_func_ptr().unwrap(), task.exit);
-            println!("\n\n\n");
-
-            let mut thread = ThreadTP::<i32, i32>::new();
-
-            println!("ThreadTP Object \nHandle: {:?} \nAssigned: {} \nTaskSender: {:?} \nTaskReceiver: {:?} \nResultSender: {:?} \nResultReceiver: {:?}",
-            thread.handle,
-            thread.assigned,
-            thread.task_queue_sender,
-            thread.task_queue_receiver,
-            thread.result_queue_sender,
-            thread.result_queue_receiver,
-            );
-            println!("\n\n\n");
-            
-
-            // Send the task
-            thread.task_queue_sender.send(task);
-
-            // Setup thread
-            let thread_task_rcv = thread.take_worker_task_receiver();
-
-            let thread_handle = thread::spawn(move|| -> Result<(), String>
-                {
-                    loop
-                    {
-                        //let received_task = task_r.recv().unwrap();
-                        let mut received_task = thread_task_rcv.recv().unwrap();
-
-                        if received_task.exit == true
-                        {
-                            return Ok(());
-                        }
-
-                        println!("Task Object \nArgs: {} \nFunc: {:?} \nExit: {}", received_task.get_args().unwrap(), received_task.get_func_ptr().unwrap(), received_task.exit);
-                        println!("\n\n\n");
-
-                        ( received_task.get_func_ptr().unwrap() )( received_task.take_args().unwrap() );
-                    }
-                });
-
-            thread.handle = Some(thread_handle);
-
-            thread_list.push(thread);
-        }
-
-        for idx in 0..5
-        {
-            let thread = thread_list.pop().unwrap();
-            thread.task_queue_sender.send(TaskTP::<i32, i32>::exit());
-            thread.handle.unwrap().join();
-        }
-
-        assert_eq!(false,true);
-    }
-
-    #[ignore]
     #[test]
     fn TestPool()
     {
-        use::std::time;
+        let num_threads: usize = 5;
+
+        // Setup the thread pool with the function input, output and number of threads
+        let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads);
+
+        // You can create an actual function that will be executed by the threads
+        // Note that the RETURN value must match the one at the creation of the pool
+        fn task(arg: (i32, i32)) -> i32
         {
-            let num_threads: usize = 10;
-            let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads);
-
-            fn task(arg: (i32, i32)) -> i32
-            {
-                let (arg1, arg2) = arg; 
-                println!("Hello from task! Args: {:?}", arg);
-                return arg1;
-            }
-
-            for idx in 0..num_threads
-            {
-                thread_pool.execute(idx, (idx as i32, idx as i32), task);
-            }
-
-            let all_results = thread_pool.wait_all();
-            println!("Results: {:?}", all_results);
-
-            for idx in 0..num_threads
-            {
-                thread_pool.execute(idx, ((idx+num_threads-1) as i32, idx as i32), task);
-            }
-
-            let all_results = thread_pool.wait_all();
-            println!("Results: {:?}", all_results);
+            // You can unpack the args struct inside of the function
+            let (arg1, arg2) = arg; 
+            println!("Hello from task! Args: {:?}", arg);
+            return arg2;
         }
 
-        thread::sleep(time::Duration::from_millis(1000));
+        // Send the task to each thread
+        for idx in 0..num_threads
+        {
+            // The pool will execute the function passed as as pointer at the selected thread
+            // Note that the ARGUMENTS type must match the one used at the creation of the pool
+            thread_pool.execute(idx, (idx as i32, (idx+1) as i32), task);
+        }
 
-        assert_eq!(false,true);
+        // All results are collected at once
+        let all_results = thread_pool.wait_all().unwrap();
+        println!("Results: {:?}", all_results);
+
+        // The result should be an array of idx+1
+        let expected_result: Vec<i32> = vec![1, 2, 3, 4, 5];
+        assert_eq!(expected_result, all_results);
     }
 
+    #[test]
+    fn TestPoolClosure()
+    {
+        let num_threads: usize = 5;
+
+        // Setup the thread pool with the function input, output and number of threads
+        let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads);
+
+        // Say you have a function that you can't change to conform for the new API, you can use a non-moving closure
+        fn task(arg1: i32, arg2: i32) -> i32
+        {
+            println!("Hello from task! Args: {:?} - {:?}", arg1, arg2);
+            return arg2;
+        }
+
+        // Send the task to each thread
+        for idx in 0..num_threads
+        {
+            // The pool will execute the function passed as as pointer at the selected thread
+            // Note that the ARGUMENTS type must match the one used at the creation of the pool
+            // Now we will create a closure to adapt the interface and unpack the args before we cann the function
+            // Note that Rust can infer the types
+            thread_pool.execute( idx, (idx as i32, (idx+1) as i32), |args| {task(args.0, args.1)} );
+        }
+
+        // All results are collected at once
+        let all_results = thread_pool.wait_all().unwrap();
+        println!("Results: {:?}", all_results);
+
+        // The result should be an array of idx+1
+        let expected_result: Vec<i32> = vec![1, 2, 3, 4, 5];
+        assert_eq!(expected_result, all_results);
+    }
+
+    // The goal is to verify if seding less tasks than threads will cause any deadlock
+    #[test]
+    fn TestPoolTasksLessThanThreads()
+    {
+        let num_threads: usize = 10;
+
+        // Setup the thread pool with the function input, output and number of threads
+        let mut thread_pool = ThreadPool::<i32, i32>::new(num_threads);
+
+        // Say you have a function that you can't change to conform for the new API, you can use a non-moving closure
+        fn task(arg1: i32) -> i32
+        {
+            println!("Hello from task! Args: {:?}", arg1);
+            return arg1;
+        }
+
+        // Send the task to each thread
+        for idx in 0..num_threads
+        {
+            // Only some threads will get work
+            if idx % 2 == 0
+            {
+                thread_pool.execute( idx, idx as i32, task );
+            }
+        }
+
+        // All results are collected at once
+        // It should skip the idle workers
+        let all_results = thread_pool.wait_all().unwrap();
+        println!("Results: {:?}", all_results);
+
+        // The result should be an array of idx+1
+        let expected_result: Vec<i32> = vec![0, 2, 4, 6, 8];
+        assert_eq!(expected_result, all_results);
+    }
+
+    // The goal of this test was to verify if the arguments passed to the threads would leak any memory (because of the static lifetime requirement)
+    // It did not showed any signs of leak
     #[ignore]
     #[test]
     fn TestPoolArgsLeak()
@@ -436,12 +435,13 @@ mod tests
                 let all_results = thread_pool.wait_all();
             }
 
-            thread::sleep(time::Duration::from_millis(10000));
+            //thread::sleep(time::Duration::from_millis(10000));
         }
         assert_eq!(false,true);
     }
 
-
+    // The goal of this test was to verify if the return value passed by the threads would leak any memory (because of the static lifetime requirement)
+    // It did not showed any signs of leak
     #[ignore]
     #[test]
     fn TestPoolReturnLeak()
@@ -467,6 +467,8 @@ mod tests
         assert_eq!(false,true);
     }
 
+    // The goal of this test was to verify if the pool creation would leak any memory
+    // It did not showed any signs of leak
     #[ignore]
     #[test]
     fn TestPoolCreationLeak()
@@ -490,31 +492,40 @@ mod tests
         assert_eq!(false,true);
     }
 
+    // The goal of this test is to verify how much faster this approach is
+    // This test might take a while to run, so it is better to ignore it
+    #[ignore]
     #[test]
     fn TestPoolPerformanceMeasure()
     {
         use::std::time;
         {
+            // Number of tasks
+            // Thing of each task some individual work that needs to synchronized at the end
             let num_tasks: usize = 1000000;
 
+            // Creates a fast task
             fn task(arg: (i32, i32, i32, i32)) -> i32
             {
                 return arg.0;
             }
 
+            // The thread pool is create before we measure time, so we ignore the pool creation cost (can we reuse threads efficiently?)
             let mut thread_pool = ThreadPool::<(i32, i32, i32, i32), i32>::new(1);
 
+            // Thread pool cost measurement
             let mut now = time::Instant::now();
             for _ in 0..num_tasks
             {
                 let _ = thread_pool.execute(0 as usize, (1, 2, 3, 4), task);
                 let all_results = thread_pool.wait_all();
+                // Results aren't printed to avoid the cost of println in the measurements
             }
             let thread_pool_time_elapsed = now.elapsed().as_millis();
             println!("Thread pool time elapsed: {}ms", thread_pool_time_elapsed);
             println!("Thread pool, tasks p/ milisec: {}t/ms", num_tasks/thread_pool_time_elapsed as usize);
 
-            /*
+            // Test with the traditional threads API
             now = time::Instant::now();
             for _ in 0..num_tasks
             {
@@ -529,9 +540,8 @@ mod tests
             let thread_spawn_time_elapsed = now.elapsed().as_millis();
             println!("Thread spwan time elapsed: {}ms", thread_spawn_time_elapsed);
             println!("Thread spawn, tasks p/ milisec: {}t/ms", num_tasks/thread_spawn_time_elapsed as usize);
-            */
 
-            /*
+            // Test with STD implementation of scoped threads
             now = time::Instant::now();
             for _ in 0..num_tasks
             {
@@ -548,9 +558,40 @@ mod tests
             let thread_scope_time_elapsed = now.elapsed().as_millis();
             println!("Scoped Thread time elapsed: {}ms", thread_scope_time_elapsed);
             println!("Scoped Thread, tasks p/ milisec: {}t/ms", num_tasks/thread_scope_time_elapsed as usize);
-            */
-
         }
+
+        // It fails so we can see the output
         assert_eq!(false,true);
+    }
+
+    // Threads currently panic the main one, however this behavior might be underdesireable to many.
+    // Why is it like that?
+    //      - Workers that panic leave the pool in an undifined state: it would be necessary to recreate the thread (such API doesn't exist at the moment) and resend the task from main
+    //      - I prefer to handle potential panics at the worker: it should be faster, as it avoids the round trip to main and easier to code
+    // Any alternatives?
+    //      - Not panic the main thread, let it recreate the whole pool and resend the task (sounds hard to use)
+    #[test]
+    #[should_panic]
+    fn TestPanickingThreads()
+    {
+        let num_tasks: usize = 1;
+
+        fn task(arg: i32) -> i32
+        {
+            // Panic inside the thread
+            panic!();
+            return arg;
+        }
+
+        let mut thread_pool = ThreadPool::<i32, i32>::new(2);
+
+        for idx in 0..num_tasks
+        {
+            let _ = thread_pool.execute(idx as usize, 1, task);
+
+            // Main will panic when it unwraps the result from the channel
+            let all_results = thread_pool.wait_all();
+            println!("Results: {:?}", all_results);
+        }
     }
 }

@@ -6,8 +6,6 @@ mod Config;
 mod ReadMemory;
 mod WriteMemory;
 mod ThreadPool;
-mod ThreadPool_v2;
-mod ThreadPool_v3;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,
