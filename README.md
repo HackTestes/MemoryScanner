@@ -91,6 +91,17 @@ So, due to increased complexity, this mode will not be supported.
 
     * [ ] Find a way to reuse search functions (start and filter)
 
+* Refactoring
+
+    * [ ] Update argument parsing
+        * Goal: improve readability, because the current code looks terrible (it was an experiment at different ways of doing argument parsing)
+        * How: get rid of the hash map, get rid of actions, use match or if-else and make a arguments struct that holds everything (it should help that only 1 struct holds all of the data insted of multiple places)
+
+    * [ ] Refactor parallel search 
+        * Goal: make the algorithm simplier
+        * Current situation: I made some bad decisions on the algorithm (making it hard and unreadable tbh), but I have since refined it
+        * How: update the docs first and then updatae the code
+
 * Performance optimization
 
     * [ ] Use threads pools in the search
@@ -110,8 +121,8 @@ So, due to increased complexity, this mode will not be supported.
         * How: remove buffer cloning where possible in the codebase
 
 * Modules
-    * [ ] Test moving closure API for thread pool
-        * Attention: for some reason, the closure implementation is slightly slower... Maybe the args copy trait could be a bottleneck??? And yes, this is consistent.
+    * [x] Test moving closure API for thread pool
+        * Attention: for some reason, the closure implementation is slightly slower due to dyn and Box 
 
 * Platforms
 
