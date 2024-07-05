@@ -58,7 +58,7 @@ I would like to point out to the reader an important detail that might be missed
 
 Therefore, it is particaularly important for a memory scanner to understand the endianess being used, otherwise it will start to interpret the values wrongly and return bogus results to the user. The endianess in this program is corrently handled automatically by the compiler, it does not have any runtime flags. So, you will need to compile the program to specific architectures for it to work correctly.
 
-## Size of the value in bytes and overflow segments in parallel search
+## Size of the value in bytes and reading out of bounds segments in parallel search
 
 If you understood the basics, you may have noticed a problem with segmenting the search and type sizes: the naive approach misses some possible matches (compared to the sequential). So let's first take a look at an example with a byte search:
 
@@ -80,7 +80,7 @@ starts here                               starts here
                                         |
 ```
 
-2. Each thread will now iterate each byte in their respective private space and check if a match was found
+2. Each thread will now iterate on each byte in their respective private space and check if a match was found
 ```
  Thread 0                        ends      Thread 1                       ends
 starts here                      here     starts here                     here
@@ -132,8 +132,8 @@ starts here                               starts here
 
 Now, none of the threads were able to find the pattern in memory, despite existing in the buffer. The closest thread 0 was able to get was 0x0001 (!=0x0101) and thread 1 was 0x0100 (!= 0x0101). But, if we repeat it once again with a sequential algorithm, we will find it:
 
-3. The sequential search. It succesfully finds the pattern in the buffer! (you can ignore the the other possible iterations)
-* Observation: it still advances byte per byte, so it doesn't miss any possibility
+1. The sequential search. It succesfully finds the pattern in the buffer! (you can ignore the the other possible iterations)
+* Observation: it still advances byte per byte, so it doesn't miss any possibility (it is similar to string search iterating per character)
 ```
                                 Forth iteration
                                  (match found)
@@ -156,11 +156,125 @@ Now, none of the threads were able to find the pattern in memory, despite existi
 
 ### The solution
 
-Overflow the memory segments: read the necessary bytes of the other segment
+To solve the outlined problem, it will be necessary to read out of the bounds of the private segment (not the **buffer**). So we need to return to the failed example and tweak a few things:
 
-Caution: the last segment cannot be overflowed, because that would be an actual buffer overflow
-    * Do not add checks at every iteration
-    * Only ajust the final segment size when you perform the partitioning
+* The thread 0 will now iterate over the entire range (from position 0 to 3)
+* Segment out of bounds read will be allowed
+* For the sake of simplicity, we will ignore thread 1
+* The longer arrow will indicate the current position
+
+
+1. The final iteration of each thread if we want them to only access their private region
+```
+                        |
+                        |         |     |                         |         |
+                        v         v     |                         v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+2. But if we allow out of baounds reads of the segment, we can find the value
+* Thread 0 was able to read a value from the other segment (1 byte)
+* Thread 1 connot read more bytes, because it is at the end of the buffer
+```
+                                  |
+                                  |     |     |                   |         |
+                                  v     |     v                   v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+As you can see, this solves the problem in a rather simple manner, although, it also brings problems with possible buffer out of bounds read. The first obvious issue is last segment reading more bytes than it holds and causing an actual buffer out of bounds read. So let's return to our previous example:
+
+* The focus is only on thread 1 now
+* The last valid position needs to be ajusted based on the size of the searched value
+* The formula: Buffer size - size = last position
+* 8 - 2 = 6
+```
+    0         1         2         3           4         5         6         7
+                                        |                         |         |
+                                        |                         v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+* Another example to make the formula more obvious
+* 8 - 3 = 5
+```
+    0         1         2         3           4         5         6         7
+                                        |               |         |         |
+                                        |               v         v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+The second problem of such approach is: other segments may read more bytes than the buffer holds as well. This essentially means that we need to ajust the final positions of all segments in order to avoid buffer out of bounds read (at partitioning time). Take a look at the following example:
+
+* 64 bit size - 8 bytes long
+* Thread 0 last position needs to be ajusted
+* Thread 1 won't even search because it doesn't fit
+* Consider that the visualization contains the last valid iteration possible for Thread 0, threfore
+    * Start: 0
+    * End: 8 - 8 = 0 (inclusive end)
+```
+    0         1         2         3           4         5         6         7
+    |
+    |         |         |         |     |     |         |         |         |
+    v         v         v         v     |     v         v         v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+* 6 bytes long
+    * Start: 0
+    * End: 8 - 6 = 2 (inclusive end)
+```
+    0         1         2         3           4         5         6         7
+                        |
+                        |         |     |     |         |         |         |
+                        v         v     |     v         v         v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+* 4 bytes long
+    * Start: 0
+    * End: 8 - 4 = 4
+    * Segment end: 3
+        * Override the end pos with if it extrapolates the private segment
+            * If (End pos > segment end) -> end = seg. end
+```
+    0         1         2         3           4         5         6         7
+                                  |
+                                  |     |     |         |         |
+                                  v     |     v         v         v
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+| 0x00  | | 0x00  | | 0x00  | | 0x01  | | | 0x01  | | 0x00  | | 0x00  | | 0x00  |
++ ----- + + ----- + + ----- + + ----- + | + ----- + + ----- + + ----- + + ----- +
+                                        |
+                                        |
+```
+
+> [!NOTE]
+> It is preferable to ajust the end position at the partitioning time insted of adding bounds check at every iterations, so the hot path can execute faster. However, one might want to keep the bounds check to simply add another layer of security.
 
 ## Complexity
 
