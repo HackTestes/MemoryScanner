@@ -281,10 +281,10 @@ mod tests
         println!("Workload: {:?}", workload);
 
         // Each thread will read 1/4 of the buffers
-        // Since they are asymmetrical, some threads will not read the second or the thrid buffer at all
+        // Since they are asymmetrical, some threads will not read the second or the third buffer at all
         // Thread 0 will read all the buffers
         // Thread 1 and 2 will not read the second one
-        // Thread 3 will only read the thrid one
+        // Thread 3 will only read the third one
         let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,250), (0,1), (0,4)], vec![(250,500), (4,8)], vec![(500,750), (8,9)], vec![(750,993)] ];
 
         assert_eq!(expected, workload);
@@ -427,10 +427,10 @@ mod tests
         println!("Workload: {:?}", workload);
 
         // Each thread will read 1/4 of the buffers
-        // Since they are asymmetrical, some threads will not read the second or the thrid buffer at all
+        // Since they are asymmetrical, some threads will not read the second or the third buffer at all
         // Thread 0 will read all the buffers
         // Thread 1 and 2 will not read the second one
-        // Thread 3 will only read the thrid one
+        // Thread 3 will only read the third one
         let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,257), (0,8), (0,11)], vec![(250,507), (4,15)], vec![(500,757), (8,16)], vec![(750,1000)] ];
 
         assert_eq!(expected, workload);
