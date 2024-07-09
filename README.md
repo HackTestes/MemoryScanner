@@ -1,4 +1,4 @@
-# Memory sacanner
+# Memory scanner
 
 ## What is it?
 
