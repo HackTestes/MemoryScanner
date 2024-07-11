@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::mem::size_of;
 
 // A simple linear search algorithm
@@ -24,7 +23,10 @@ macro_rules! Comparator
 {
     ($target_type:ty, $func_name: ident) =>
     {
-        fn $func_name(buffer: Arc<Vec<u8>>, start: usize, end: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize) -> Vec<usize>
+        // The mem_region_slice holds a partial view of a bigger buffer, it represents the slice of memory belonging to a specific region
+        // It also prevents the function from reading from another region in the buffer
+        // Another detail is that the start and end are all relative to the region, not to the bigger buffer
+        fn $func_name(mem_region_slice: &[u8], start: usize, end: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize) -> Vec<usize>
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
@@ -39,7 +41,7 @@ macro_rules! Comparator
 
                 // Transform the memory into a type
                 // This transformation (associated function) cannot accept a generic, so I will use a macro to bypass it - a trait might solve it
-                let value_to_check: $target_type = <$target_type>::from_ne_bytes( buffer[current_pos..(current_pos+size_of::<$target_type>())].try_into().unwrap() );
+                let value_to_check: $target_type = <$target_type>::from_ne_bytes( mem_region_slice[current_pos..(current_pos+size_of::<$target_type>())].try_into().unwrap() );
 
                 // What kind of comparison should we make?
                 // If there is less comparisons than what is supported (2), it will assume the it was true
@@ -113,7 +115,8 @@ mod tests
     #[test]
     fn TestSearchEngines_Comparator()
     {
-        let mut buffer: Vec<u8> = vec![0; 50];
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
 
         // Create and insert needle
         let needle: f32 = 15.0;
@@ -132,15 +135,251 @@ mod tests
         let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
         let operations: Vec<(String, f32)> = vec![(">".to_string(), 10.0 as f32), ("<".to_string(), 20.0 as f32)];
 
-        // From this point on, the buffer cannot be changed
+        // Even if you use arc, you can still slice it
         let arc_buffer = Arc::new(buffer);
 
-        let result = LinearSearch_Comparator_f32(arc_buffer, start, end, operations, 1000);
+        let result = LinearSearch_Comparator_f32(&arc_buffer[0..buffer_size], start, end, operations, 1000);
 
         println!("Result: {:?}", result);
 
         // Did it find the correct start position?
         let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorEqual()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorHigherThan()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u8)> = vec![(">".to_string(), 14)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorHigherThanOrEqual()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let mut needle: u8 = 25;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        needle = 15;
+        insert_pos = 30;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u8)> = vec![(">=".to_string(), 15)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25, 30];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorLowerThan()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![10; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 9;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u8)> = vec![("<".to_string(), 10)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorLowerThanOrEqual()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![10; buffer_size];
+
+        // Create and insert needle
+        let mut needle: u8 = 9;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        needle = 5;
+        insert_pos = 30;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u8)> = vec![("<=".to_string(), 9)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25, 30];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorRange()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u8)> = vec![(">".to_string(), 10), ("<".to_string(), 20)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorOverlapping()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle_size_bytes: usize = size_of::<u32>();
+        buffer[25] = 1;
+        buffer[26] = 1;
+        buffer[27] = 1;
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let end: usize = buffer.len() - needle_size_bytes; // - needle_size_bytes: avoid buffer out of bouds read
+        let operations: Vec<(String, u16)> = vec![("==".to_string(), 257)];
+
+        let result = LinearSearch_Comparator_u16(&buffer[0..buffer_size], start, end, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25, 26];
         assert_eq!(result, expected);
     }
 }
