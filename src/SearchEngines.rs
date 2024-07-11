@@ -15,6 +15,22 @@ fn NaiveLinearSearchPattern()
 
 }
 
+macro_rules! SelectCompareValues
+{
+    ($value_to_check: expr, $target_value: expr, $comparison_op: expr) =>
+    {
+        match $comparison_op.as_str()
+        {
+            "==" => $value_to_check == $target_value,
+            ">" => $value_to_check > $target_value,
+            "<" => $value_to_check < $target_value,
+            ">=" => $value_to_check >= $target_value,
+            "<=" => $value_to_check <= $target_value,
+            _ => panic!("No comparison operation!")
+        };
+    }
+}
+
 // It is similar to the naive linear search
 // The difference is that is transforms the value and perform comparisions
 // For example, it takes the buffer -> transforms it into a type (such as fp32) -> makes comparisons
@@ -57,15 +73,7 @@ macro_rules! Comparator
                     let comparison_op: &String = &operations[op_idx].0;
                     let target_value: $target_type = operations[op_idx].1;
                 
-                    let result = match comparison_op.as_str()
-                    {
-                        "==" => value_to_check == target_value,
-                        ">" => value_to_check > target_value,
-                        "<" => value_to_check < target_value,
-                        ">=" => value_to_check >= target_value,
-                        "<=" => value_to_check <= target_value,
-                        _ => panic!("No comparison operation!")
-                    };
+                    let result = SelectCompareValues!(value_to_check, target_value, comparison_op);
 
                     // The value does not satify the constraints
                     if result == false
@@ -110,6 +118,94 @@ Comparator!(u128, LinearSearch_Comparator_u128);
 // There is no native 8 or 16 bits floating point type
 Comparator!(f32, LinearSearch_Comparator_f32);
 Comparator!(f64, LinearSearch_Comparator_f64);
+
+
+// It filters the matches found in the comparator search
+macro_rules! ComparatorFilter
+{
+    ($target_type:ty, $func_name: ident) =>
+    {
+        // The mem_region_slice holds a partial view of a bigger buffer and of the private segment (thread workload), it represents the slice of memory belonging to a specific region
+        // It also prevents the function from reading from another region or private segment in the buffer
+        // The slice start is necessary to ajust the results, so it returns an address relative to the memory region
+        fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize, previous_matches: Vec<usize>) -> Vec<usize>
+        {
+            // Store all the results
+            // Buffer sized if based on usize's size - how many addresses can we store?
+            let mut match_addresses: Vec<usize> = Vec::with_capacity(match_buffer_size * size_of::<usize>());
+
+            // Iterate pervious matches
+            // Note that the slice must contain the searched matches
+            let end: usize = mem_region_slice_view.len() - (size_of::<$target_type>() - 1);
+            for prev_match in previous_matches
+            {
+                // The match address is relative to the memory region
+                // So ajust it to the slice
+                let slice_relative_prev_match: usize = prev_match - slice_view_start;
+
+                // Assume that it will match
+                let mut cmp_result: bool = true;
+
+                // Transform the memory into a type
+                // This transformation (associated function) cannot accept a generic, so I will use a macro to bypass it - a trait might solve it
+                let value_to_check: $target_type = <$target_type>::from_ne_bytes( mem_region_slice_view[slice_relative_prev_match..(slice_relative_prev_match+size_of::<$target_type>())].try_into().unwrap() );
+
+                // What kind of comparison should we make?
+                // If there is less comparisons than what is supported (2), it will assume the it was true
+                // This allows to make make single checks like: >100 (without having to specify another check)
+                for op_idx in 0..operations.len()
+                {
+                    // Unpack the operation
+                    let comparison_op: &String = &operations[op_idx].0;
+                    let target_value: $target_type = operations[op_idx].1;
+                
+                    let result = SelectCompareValues!(value_to_check, target_value, comparison_op);
+
+                    // The value does not satify the constraints
+                    if result == false
+                    {
+                        // Alert the outer loop
+                        cmp_result = result;
+
+                        // There is no need to continue the verification, continue to the next value
+                        break;
+                    }
+                }
+
+                // The match was successful
+                if cmp_result == true
+                {
+                    // Store the match
+                    // We simply store the original value, since it already represents the address relative to the memory regiion
+                    match_addresses.push(prev_match);
+                }
+            }
+            return match_addresses;
+        }
+    }
+}
+
+// Declaring the supported types for other modules to simply use a function
+// It is important to be a function, so all of the uses point to the same code, allowing the code cache to be better used
+// Signed int
+ComparatorFilter!(i8, LinearSearch_ComparatorFilter_i8);
+ComparatorFilter!(i16, LinearSearch_ComparatorFilter_i16);
+ComparatorFilter!(i32, LinearSearch_ComparatorFilter_i32);
+ComparatorFilter!(i64, LinearSearch_ComparatorFilter_i64);
+ComparatorFilter!(i128, LinearSearch_ComparatorFilter_i128);
+
+// Unsigned int
+ComparatorFilter!(u8, LinearSearch_ComparatorFilter_u8);
+ComparatorFilter!(u16, LinearSearch_ComparatorFilter_u16);
+ComparatorFilter!(u32, LinearSearch_ComparatorFilter_u32);
+ComparatorFilter!(u64, LinearSearch_ComparatorFilter_u64);
+ComparatorFilter!(u128, LinearSearch_ComparatorFilter_u128);
+
+// Floating point
+// There is no native 8 or 16 bits floating point type
+ComparatorFilter!(f32, LinearSearch_ComparatorFilter_f32);
+ComparatorFilter!(f64, LinearSearch_ComparatorFilter_f64);
+
 
 #[cfg(test)]
 mod tests
@@ -463,7 +559,6 @@ mod tests
 
         println!("Result: {:?}", result);
 
-        // Did it find the correct start position?
         let expected: Vec<usize> = vec![];
         assert_eq!(result, expected);
     }
@@ -495,6 +590,106 @@ mod tests
 
         // Did it find the correct start position?
         let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorFilter()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u32>();
+        let mut insert_pos = 30;
+
+        buffer[insert_pos] = needle;
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+
+        // Assume the it had a match at 25 previously
+        // Assume that the needle moved
+        let previous_matches: Vec<usize> = vec![25];
+
+        // Onlt share part of the buffer and see if it corrects the output
+        let result = LinearSearch_ComparatorFilter_u8(&buffer[start..buffer_size], start, operations, 1000, previous_matches);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorFilterSomethingRemains()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u32>();
+        let mut insert_pos = 25;
+
+        buffer[insert_pos] = needle;
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+
+        // Assume the it had a match at 25, 30 and 45 previously
+        // Assume that the needle is actually 25 and the buffer changed to represent this
+        let previous_matches: Vec<usize> = vec![25, 30, 45];
+
+        // Onlt share part of the buffer and see if it corrects the output
+        let result = LinearSearch_ComparatorFilter_u8(&buffer[start..buffer_size], start, operations, 1000, previous_matches);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorFilterAjustAddress()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u32>();
+
+        buffer[25] = needle;
+        buffer[30] = needle;
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        // The thread only gets half of the buffer
+        let start: usize = 25;
+        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+
+        // Assume the it had a match at 25, 30 and 45 previously
+        // Assume that the needle is actually 25 and the buffer changed to represent this
+        let previous_matches: Vec<usize> = vec![25, 30, 45];
+
+        // Onlt share part of the buffer and see if it corrects the output
+        let result = LinearSearch_ComparatorFilter_u8(&buffer[start..buffer_size], start, operations, 1000, previous_matches);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25, 30];
         assert_eq!(result, expected);
     }
 }
