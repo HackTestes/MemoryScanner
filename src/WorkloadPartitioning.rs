@@ -1,19 +1,9 @@
-// A dummy memory region struct for testing
-struct MemRegion
-{
-    size: usize
-}
-
-impl MemRegion
-{
-    fn new(size_bytes: usize) -> Self
-    {
-        return MemRegion{size: size_bytes};
-    }
-}
+use crate::GenericInterface;
 
 // It return the positions in which the thread will iterate over
-fn partition_thread_workload_equal(num_threads: usize, regions: Vec<MemRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
+// It is important to share information about the regions, so it can in ONE loop create the thread task queue
+// (insted of creating the region partitions and having to redo the iterations for the queue)
+fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericInterface::GenericMemoryRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
 {
     // This holds the start and end of each thread task in private a queue
     // threads_workload_queues[0] -> thread 0 queue
@@ -29,7 +19,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<MemRegion>, 
         // The value needs to be rounded to the highest integer to avoid reounding to zero (there is no size 0)
         // 0.5 -> 0 (invalid rounding)
         // 0.5 -> 1 (correct response)
-        let segment_size: usize = region.size.div_ceil(num_threads);
+        let segment_size: usize = region.size_bytes.div_ceil(num_threads);
 
         // Now iterate over each possible segment and verify if it is suitable
         for thread_id in 0..num_threads
@@ -39,7 +29,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<MemRegion>, 
 
             // Does the type fit? Does the type overflow the buffer? Does it cause an out of bounds read?
             // This also prevents the end from underflowing
-            if (start_pos + target_value_size_bytes) > region.size
+            if (start_pos + target_value_size_bytes) > region.size_bytes
             {
                 // If so, the thread will have no work assigned
                 continue;
@@ -48,7 +38,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<MemRegion>, 
             // Calculate the last position on can read that does not cause an out of bounds read
             // +1, because the end is non inclusive
             // Otherwise a start 0 and end 0 would have no iterations
-            let mut end_pos: usize = region.size - target_value_size_bytes +1;
+            let mut end_pos: usize = region.size_bytes - target_value_size_bytes +1;
 
             // Does the calculation extrapolate the segment end?
             let segment_end = start_pos + segment_size;
@@ -70,7 +60,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<MemRegion>, 
 // That means that the function used to search cannot read out of the bounds of the private segment.
 // So insted of iterating over positions, it returns the positions of slice (a buffer with 10 bytes [0..10])
 // It return the positions of a slice
-fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<MemRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
+fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<GenericInterface::GenericMemoryRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
 {
     // This holds the start and end of each thread task in private a queue
     // threads_workload_queues[0] -> thread 0 queue
@@ -86,7 +76,7 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<M
         // The value needs to be rounded to the highest integer to avoid reounding to zero (there is no size 0)
         // 0.5 -> 0 (invalid rounding)
         // 0.5 -> 1 (correct response)
-        let segment_size: usize = region.size.div_ceil(num_threads);
+        let segment_size: usize = region.size_bytes.div_ceil(num_threads);
 
         // Now iterate over each possible segment and verify if it is suitable
         for thread_id in 0..num_threads
@@ -95,14 +85,14 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<M
             let start_pos: usize = thread_id * segment_size;
 
             // Does the type fit? Does the type overflow the buffer? Does it cause an out of bounds read?
-            if (start_pos + target_value_size_bytes) > region.size
+            if (start_pos + target_value_size_bytes) > region.size_bytes
             {
                 // If so, the thread will have no work assigned
                 continue;
             }
 
             // Simply get the end of the slice, the search function will iterate over it and peferom the bounds check
-            let mut end_pos: usize = region.size;
+            let mut end_pos: usize = region.size_bytes;
 
             // Does the calculation extrapolate the segment end?
             // We need to add the size of the searched value to represent the out of bound read in a slice
@@ -122,18 +112,32 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<M
     return threads_workload_queues;
 }
 
+// This partitions the resutlts between all threads
+// It should be used for filter operations
+/*
+fn partition_thread_workload_equal_slice_view(num_threads: usize, matches_addresses: Vec<Matches>) -> Vec< Vec<(usize, usize)> >
+{
+    
+}
+*/
+
 #[cfg(test)]
 mod tests
 {
     // Import the current module to all tests
     use crate::WorkloadPartitioning::*;
 
+    fn CreateFakeMemoryRegion(size: usize) -> GenericInterface::GenericMemoryRegion
+    {
+        return GenericInterface::GenericMemoryRegion::new(GenericInterface::PageProtection_NoAccess, GenericInterface::GenericRegionState::Resident, 0, size);
+    }
+
     #[test]
     fn TestWorkloadPartitioningEqual_RegularCaseSingleByte()
     {
         let num_threads = 2;
         let target_size_bytes = 1;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -151,7 +155,7 @@ mod tests
         {
             let num_threads = 2;
             let target_size_bytes = 4;
-            let memory_regions = vec![MemRegion::new(8)];
+            let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
             let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -169,7 +173,7 @@ mod tests
         {
             let num_threads = 4;
             let target_size_bytes = 8;
-            let memory_regions = vec![MemRegion::new(1000)];
+            let memory_regions = vec![CreateFakeMemoryRegion(1000)];
 
             let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -186,7 +190,7 @@ mod tests
     {
         let num_threads = 2;
         let target_size_bytes = 8;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -204,7 +208,7 @@ mod tests
     {
         let num_threads = 2;
         let target_size_bytes = 6;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -223,7 +227,7 @@ mod tests
     {
         let num_threads = 6;
         let target_size_bytes = 1;
-        let memory_regions = vec![MemRegion::new(4)];
+        let memory_regions = vec![CreateFakeMemoryRegion(4)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -240,7 +244,7 @@ mod tests
     {
         let num_threads = 4;
         let target_size_bytes = 16;
-        let memory_regions = vec![MemRegion::new(10)];
+        let memory_regions = vec![CreateFakeMemoryRegion(10)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -256,7 +260,7 @@ mod tests
     {
         let num_threads = 4;
         let target_size_bytes = 1;
-        let memory_regions = vec![MemRegion::new(1000), MemRegion::new(1000)];
+        let memory_regions = vec![CreateFakeMemoryRegion(1000), CreateFakeMemoryRegion(1000)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -274,7 +278,7 @@ mod tests
     {
         let num_threads = 4;
         let target_size_bytes = 8;
-        let memory_regions = vec![MemRegion::new(1000), MemRegion::new(8), MemRegion::new(16)];
+        let memory_regions = vec![CreateFakeMemoryRegion(1000), CreateFakeMemoryRegion(8), CreateFakeMemoryRegion(16)];
 
         let workload = partition_thread_workload_equal(num_threads, memory_regions, target_size_bytes);
 
@@ -295,7 +299,7 @@ mod tests
     {
         let num_threads = 2;
         let target_size_bytes = 1;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -312,7 +316,7 @@ mod tests
     {
         let num_threads = 2;
         let target_size_bytes = 4;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -331,7 +335,7 @@ mod tests
     {
         let num_threads = 2;
         let target_size_bytes = 8;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -350,7 +354,7 @@ mod tests
     {
         let num_threads = 2;
         let target_size_bytes = 6;
-        let memory_regions = vec![MemRegion::new(8)];
+        let memory_regions = vec![CreateFakeMemoryRegion(8)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -369,7 +373,7 @@ mod tests
     {
         let num_threads = 6;
         let target_size_bytes = 1;
-        let memory_regions = vec![MemRegion::new(4)];
+        let memory_regions = vec![CreateFakeMemoryRegion(4)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -386,7 +390,7 @@ mod tests
     {
         let num_threads = 4;
         let target_size_bytes = 16;
-        let memory_regions = vec![MemRegion::new(10)];
+        let memory_regions = vec![CreateFakeMemoryRegion(10)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -403,7 +407,7 @@ mod tests
     {
         let num_threads = 4;
         let target_size_bytes = 1;
-        let memory_regions = vec![MemRegion::new(1000), MemRegion::new(1000)];
+        let memory_regions = vec![CreateFakeMemoryRegion(1000), CreateFakeMemoryRegion(1000)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 
@@ -420,7 +424,7 @@ mod tests
     {
         let num_threads = 4;
         let target_size_bytes = 8;
-        let memory_regions = vec![MemRegion::new(1000), MemRegion::new(8), MemRegion::new(16)];
+        let memory_regions = vec![CreateFakeMemoryRegion(1000), CreateFakeMemoryRegion(8), CreateFakeMemoryRegion(16)];
 
         let workload = partition_thread_workload_equal_slice_view(num_threads, memory_regions, target_size_bytes);
 

@@ -527,6 +527,7 @@ mod tests
             println!("Thread pool, tasks p/ milisec: {}t/ms", num_tasks/thread_pool_time_elapsed as usize);
 
             // Test with the traditional threads API
+            /*
             now = time::Instant::now();
             for _ in 0..num_tasks
             {
@@ -541,8 +542,10 @@ mod tests
             let thread_spawn_time_elapsed = now.elapsed().as_millis();
             println!("Thread spwan time elapsed: {}ms", thread_spawn_time_elapsed);
             println!("Thread spawn, tasks p/ milisec: {}t/ms", num_tasks/thread_spawn_time_elapsed as usize);
+            */
 
             // Test with STD implementation of scoped threads
+            /*
             now = time::Instant::now();
             for _ in 0..num_tasks
             {
@@ -559,6 +562,7 @@ mod tests
             let thread_scope_time_elapsed = now.elapsed().as_millis();
             println!("Scoped Thread time elapsed: {}ms", thread_scope_time_elapsed);
             println!("Scoped Thread, tasks p/ milisec: {}t/ms", num_tasks/thread_scope_time_elapsed as usize);
+            */
         }
 
         // It fails so we can see the output

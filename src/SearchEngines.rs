@@ -15,6 +15,8 @@ fn NaiveLinearSearchPattern()
 
 }
 
+
+// This function is shared between the comparator and its filter
 macro_rules! SelectCompareValues
 {
     ($value_to_check: expr, $target_value: expr, $comparison_op: expr) =>

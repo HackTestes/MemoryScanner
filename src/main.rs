@@ -6,6 +6,10 @@ mod Config;
 mod ReadMemory;
 mod WriteMemory;
 mod ThreadPool;
+mod WorkloadPartitioning;
+mod SearchEngines;
+mod GenericInterface;
+mod OSInterface;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,
