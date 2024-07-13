@@ -1,7 +1,5 @@
 // This should be a crate in the future
 
-// TODO! Remove pub in substructures, they should be private
-
 /*
 # Considerations
 
