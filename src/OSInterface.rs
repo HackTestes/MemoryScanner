@@ -332,21 +332,28 @@ pub struct MemoryRegionIterator
 }
 
 #[cfg(test)]
+pub static mut iter_over_mem_regions_should_fail: bool = false;
+
+#[cfg(test)]
 impl Iterator for MemoryRegionIterator
 {
     type Item = Result<GenericOSInterface::GenericMemoryRegion, GenericOSInterface::GenericOSErrors>;
 
     fn next(&mut self) -> Option< Result<GenericOSInterface::GenericMemoryRegion, GenericOSInterface::GenericOSErrors> >
     {
+        // Insert errors
+        // It needs a special global var
+        // This is messy, but it will work for now
+        if unsafe{iter_over_mem_regions_should_fail} == true
+        {
+            // Reset the value after use (to make tests mostly independent)
+            unsafe{iter_over_mem_regions_should_fail = false;}
+            return Some( Err(GenericOSInterface::GenericOSErrors::GenericFail) );
+        }
+
         if self.current_vm_address < 1000
         {
             let current_vm_address = self.current_vm_address;
-
-            // Insert errors
-            /*if current_vm_address == 0
-            {
-                return Some( Err(GenericOSInterface::GenericOSErrors::GenericFail) );
-            }*/
 
             // Insert pages with different permissions
             if current_vm_address == 0
@@ -429,6 +436,7 @@ pub fn iter_over_mem_regions(handle: OSSpecificHandle) -> MemoryRegionIterator
         process_handle: handle
     };
 }
+
 
 #[cfg(test)]
 pub fn write_into_process_vm(process_handle: OSSpecificHandle, buffer: &[u8], absolute_vm_address: usize) -> Result<(), GenericOSInterface::GenericOSErrors>
