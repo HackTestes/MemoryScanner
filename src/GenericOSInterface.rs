@@ -450,14 +450,8 @@ mod tests
     #[test]
     fn TestProcessVMMappingsFail()
     {
-        let process = GenericProcess::attach(1).unwrap();
+        let process = GenericProcess::attach(6).unwrap();
 
-        // Say that it needs to error
-        unsafe{iter_over_mem_regions_should_fail = true};
-
-        // It makes no sense to combine the at least match with the exact one
-        // This example is just to show one of such incompatible cases
-        // Searches for a region that can be at least executed and read-only
         let result = process.get_mem_regions_info(PageProtection_Execute, Some(PageProtection_Read), Some(GenericRegionState::Resident));
 
         println!("Op result {:?}", result);

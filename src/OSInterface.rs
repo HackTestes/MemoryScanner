@@ -331,8 +331,6 @@ pub struct MemoryRegionIterator
     process_handle: OSSpecificHandle
 }
 
-#[cfg(test)]
-pub static mut iter_over_mem_regions_should_fail: bool = false;
 
 #[cfg(test)]
 impl Iterator for MemoryRegionIterator
@@ -342,12 +340,9 @@ impl Iterator for MemoryRegionIterator
     fn next(&mut self) -> Option< Result<GenericOSInterface::GenericMemoryRegion, GenericOSInterface::GenericOSErrors> >
     {
         // Insert errors
-        // It needs a special global var
-        // This is messy, but it will work for now
-        if unsafe{iter_over_mem_regions_should_fail} == true
+        // It needs a special instantiator function
+        if self.current_vm_address == 2000
         {
-            // Reset the value after use (to make tests mostly independent)
-            unsafe{iter_over_mem_regions_should_fail = false;}
             return Some( Err(GenericOSInterface::GenericOSErrors::GenericFail) );
         }
 
@@ -429,12 +424,25 @@ impl Iterator for MemoryRegionIterator
 #[cfg(test)]
 pub fn iter_over_mem_regions(handle: OSSpecificHandle) -> MemoryRegionIterator
 {
-    // Instantiate and return the iterator
-    return MemoryRegionIterator
+    if handle < 5
     {
-        current_vm_address: 0,
-        process_handle: handle
-    };
+        // Instantiate and return the iterator
+        return MemoryRegionIterator
+        {
+            current_vm_address: 0,
+            process_handle: handle
+        };
+    }
+
+    else
+    {
+        // Instantiate and return the iterator
+        return MemoryRegionIterator
+        {
+            current_vm_address: 2000,
+            process_handle: handle
+        };
+    }
 }
 
 
