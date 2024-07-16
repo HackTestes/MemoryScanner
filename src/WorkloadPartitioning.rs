@@ -1,9 +1,9 @@
-use crate::GenericInterface;
+use crate::GenericOSInterface;
 
 // It return the positions in which the thread will iterate over
 // It is important to share information about the regions, so it can in ONE loop create the thread task queue
 // (insted of creating the region partitions and having to redo the iterations for the queue)
-fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericInterface::GenericMemoryRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
+fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericOSInterface::GenericMemoryRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
 {
     // This holds the start and end of each thread task in private a queue
     // threads_workload_queues[0] -> thread 0 queue
@@ -60,7 +60,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericInter
 // That means that the function used to search cannot read out of the bounds of the private segment.
 // So insted of iterating over positions, it returns the positions of slice (a buffer with 10 bytes [0..10])
 // It return the positions of a slice
-fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<GenericInterface::GenericMemoryRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
+fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<GenericOSInterface::GenericMemoryRegion>, target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
 {
     // This holds the start and end of each thread task in private a queue
     // threads_workload_queues[0] -> thread 0 queue
@@ -127,9 +127,9 @@ mod tests
     // Import the current module to all tests
     use crate::WorkloadPartitioning::*;
 
-    fn CreateFakeMemoryRegion(size: usize) -> GenericInterface::GenericMemoryRegion
+    fn CreateFakeMemoryRegion(size: usize) -> GenericOSInterface::GenericMemoryRegion
     {
-        return GenericInterface::GenericMemoryRegion::new(GenericInterface::PageProtection_NoAccess, GenericInterface::GenericRegionState::Resident, 0, size);
+        return GenericOSInterface::GenericMemoryRegion::new(GenericOSInterface::PageProtection_NoAccess, GenericOSInterface::GenericRegionState::Resident, 0, size);
     }
 
     #[test]

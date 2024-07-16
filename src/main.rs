@@ -8,7 +8,7 @@ mod WriteMemory;
 mod ThreadPool;
 mod WorkloadPartitioning;
 mod SearchEngines;
-mod GenericInterface;
+mod GenericOSInterface;
 mod OSInterface;
 
 use windows_sys::{
