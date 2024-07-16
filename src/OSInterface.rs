@@ -424,6 +424,7 @@ impl Iterator for MemoryRegionIterator
 #[cfg(test)]
 pub fn iter_over_mem_regions(handle: OSSpecificHandle) -> MemoryRegionIterator
 {
+    // Normal execution path
     if handle < 5
     {
         // Instantiate and return the iterator
@@ -434,6 +435,7 @@ pub fn iter_over_mem_regions(handle: OSSpecificHandle) -> MemoryRegionIterator
         };
     }
 
+    // Needed to insert error in the memory mappings test
     else
     {
         // Instantiate and return the iterator
