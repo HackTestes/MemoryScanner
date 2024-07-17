@@ -1,4 +1,5 @@
 use crate::OSInterface;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum GenericOSErrors
@@ -21,6 +22,100 @@ pub const PageProtection_Write: u32 =    0b00000000_00000000_00000000_00000010_u
 pub const PageProtection_Execute: u32 =  0b00000000_00000000_00000000_00000100_u32;
 
 
+struct GenericPageProtectionsConst
+{
+    pub permissions: GenericPageProtections
+}
+
+impl GenericPageProtectionsConst
+{
+    pub const PageProtection_NoAccess: u32 = 0b00000000_00000000_00000000_00000000_u32; // Redundant, but can be useful for some OSes
+    pub const PageProtection_Read: u32 =     0b00000000_00000000_00000000_00000001_u32;
+    pub const PageProtection_Write: u32 =    0b00000000_00000000_00000000_00000010_u32;
+    pub const PageProtection_Execute: u32 =  0b00000000_00000000_00000000_00000100_u32;
+
+    pub fn new(perms: GenericPageProtections) -> GenericPageProtectionsConst
+    {
+        return GenericPageProtectionsConst{permissions: perms};
+    }
+
+    pub fn get(&self) -> GenericPageProtections
+    {
+        return self.permissions;
+    }
+}
+
+impl fmt::Display for GenericPageProtectionsConst
+{
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        let perms = self.get();
+        let mut perms_strings: Vec<String> = Vec::new();
+
+        // Check for no access
+        if perms == PageProtection_NoAccess
+        {
+            // Early return
+            return write!(f, "No Access");
+        }
+    
+        // Check for read
+        if (perms & PageProtection_Read) == PageProtection_Read
+        {
+            perms_strings.push("Read".to_string());
+        }
+    
+        // Check for write
+        if (perms & PageProtection_Write) == PageProtection_Write
+        {
+            perms_strings.push("Write".to_string());
+        }
+    
+        // Check for Execute
+        if (perms & PageProtection_Execute) == PageProtection_Execute
+        {
+            perms_strings.push("Execute".to_string());
+        }
+    
+        return write!(f, "{}", perms_strings.join(" | "));
+    }
+}
+
+// How to diplay the permissions
+// Note: I tried using the Display trait, but it doesn't work well with type aliases
+pub fn display_page_protection(perms: GenericPageProtections) -> String
+{
+    let mut perms_strings: Vec<String> = Vec::new();
+
+    // Check for no access
+    if perms == PageProtection_NoAccess
+    {
+        // Early return
+        return format!("No Access");
+    }
+
+    // Check for read
+    if (perms & PageProtection_Read) == PageProtection_Read
+    {
+        perms_strings.push("Read".to_string());
+    }
+
+    // Check for write
+    if (perms & PageProtection_Write) == PageProtection_Write
+    {
+        perms_strings.push("Write".to_string());
+    }
+
+    // Check for Execute
+    if (perms & PageProtection_Execute) == PageProtection_Execute
+    {
+        perms_strings.push("Execute".to_string());
+    }
+
+    return format!("{}", perms_strings.join(" | "));
+}
+
 // Types
 // Linux:
 //      - present (https://docs.kernel.org/admin-guide/mm/pagemap.html)
@@ -35,6 +130,21 @@ pub enum GenericRegionState
     OnlyMapped, // It only has a virtual mapping, but doesn't have any physical memory backing
     Free, // It is not mapped or stored physically in RAM
     Invalid // It returned nothing valid
+}
+
+impl fmt::Display for GenericRegionState
+{
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        match self
+        {
+            GenericRegionState::Resident => return write!(f, "Resident"),
+            GenericRegionState::OnlyMapped => return write!(f, "OnlyMapped"),
+            GenericRegionState::Free => return write!(f, "Free"),
+            GenericRegionState::Invalid => return write!(f, "Invalid")
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -467,6 +577,49 @@ mod tests
 
         // Did it succeed?
         assert!( matches!(result, Err(GenericOSErrors::GenericFail)) );
+    }
 
+    #[test]
+    fn TestDisplayPagePermissions()
+    {
+        // Read only
+        assert_eq!("Read", display_page_protection(PageProtection_Read));
+
+        // Read Write
+        assert_eq!("Read | Write", display_page_protection(PageProtection_Write | PageProtection_Read));
+
+        // Read Write Execute
+        assert_eq!("Read | Write | Execute", display_page_protection(PageProtection_Execute | PageProtection_Write | PageProtection_Read));
+
+        // Read Execute
+        assert_eq!("Read | Execute", display_page_protection(PageProtection_Execute | PageProtection_Read));
+
+        // Write Execute
+        assert_eq!("Write | Execute", display_page_protection(PageProtection_Execute | PageProtection_Write));
+
+        // Execute only
+        assert_eq!("Execute", display_page_protection(PageProtection_Execute));
+
+        // Write only
+        assert_eq!("Write", display_page_protection(PageProtection_Write));
+
+        // No Access
+        assert_eq!("No Access", display_page_protection(PageProtection_NoAccess));
+    }
+
+    #[test]
+    fn TestDisplayResgionState()
+    {
+        assert_eq!("Resident", format!("{}", GenericRegionState::Resident));
+        assert_eq!("Free", format!("{}", GenericRegionState::Free));
+        assert_eq!("OnlyMapped", format!("{}", GenericRegionState::OnlyMapped));
+        assert_eq!("Invalid", format!("{}", GenericRegionState::Invalid));
+    }
+
+    #[test]
+    fn TestPageProtectionTest()
+    {
+        println!("{}", GenericPageProtectionsConst::new( GenericPageProtectionsConst::PageProtection_Read | GenericPageProtectionsConst::PageProtection_Write ));
+        assert!(false);
     }
 }
