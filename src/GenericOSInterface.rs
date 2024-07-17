@@ -74,6 +74,15 @@ pub struct GenericProcess
     handle: OSInterface::OSSpecificHandle
 }
 
+// Closes the handle, otherwise we will have a memory leak with the descriptors
+impl Drop for GenericProcess
+{
+    fn drop(&mut self)
+    {
+        OSInterface::close_handle(self.handle);
+    }
+}
+
 impl GenericProcess
 {
     // Attach to the process

@@ -43,6 +43,23 @@ pub fn get_process_handle(process_id: u64) -> Result<windows_sys::Win32::Foundat
     return Ok(handle);
 }
 
+#[cfg(target_os = "windows")]
+#[cfg(not(test))]
+pub fn close_handle(handle: windows_sys::Win32::Foundation::HANDLE) -> Result<(), GenericOSInterface::GenericOSErrors>
+{
+    let result = unsafe {windows_sys::Win32::Foundation::CloseHandle(handle)};
+
+    if result != 0
+    {
+        return Ok(());
+    }
+
+    else
+    {
+        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+    }
+}
+
 // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex
 #[cfg(not(test))]
 #[cfg(target_os = "windows")]
@@ -319,6 +336,20 @@ pub fn get_process_handle(process_id: u64) -> Result<OSSpecificHandle, GenericOS
     }
 
     return Ok(process_id);
+}
+
+#[cfg(test)]
+pub fn close_handle(handle: OSSpecificHandle) -> Result<(), GenericOSInterface::GenericOSErrors>
+{
+    if handle == 0
+    {
+        return Ok(());
+    }
+
+    else
+    {
+        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+    }
 }
 
 #[cfg(test)]
