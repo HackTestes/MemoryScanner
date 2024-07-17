@@ -14,6 +14,7 @@ pub enum GenericOSErrors
 // 32 bits might be overkill (as it can store up to 32 permissions), but I would like to future proof the API a little bit
 // I am using a bit map to facilitate the usage, such as composing multiple permissions in a single variable
 // It also eases the use of bit operations (AND, OR, XOR...)
+
 pub type GenericPageProtections = u32;
 
 pub const PageProtection_NoAccess: u32 = 0b00000000_00000000_00000000_00000000_u32; // Redundant, but can be useful for some OSes
@@ -21,31 +22,25 @@ pub const PageProtection_Read: u32 =     0b00000000_00000000_00000000_00000001_u
 pub const PageProtection_Write: u32 =    0b00000000_00000000_00000000_00000010_u32;
 pub const PageProtection_Execute: u32 =  0b00000000_00000000_00000000_00000100_u32;
 
+// A type associated to the page protections
+// This is done so we can have associated methods
+#[derive(Debug)]
+pub struct GenericPageProtectionsStruct(GenericPageProtections);
 
-struct GenericPageProtectionsConst
+impl GenericPageProtectionsStruct
 {
-    pub permissions: GenericPageProtections
-}
-
-impl GenericPageProtectionsConst
-{
-    pub const PageProtection_NoAccess: u32 = 0b00000000_00000000_00000000_00000000_u32; // Redundant, but can be useful for some OSes
-    pub const PageProtection_Read: u32 =     0b00000000_00000000_00000000_00000001_u32;
-    pub const PageProtection_Write: u32 =    0b00000000_00000000_00000000_00000010_u32;
-    pub const PageProtection_Execute: u32 =  0b00000000_00000000_00000000_00000100_u32;
-
-    pub fn new(perms: GenericPageProtections) -> GenericPageProtectionsConst
+    pub fn new(perms: GenericPageProtections) -> GenericPageProtectionsStruct
     {
-        return GenericPageProtectionsConst{permissions: perms};
+        return GenericPageProtectionsStruct(perms);
     }
 
     pub fn get(&self) -> GenericPageProtections
     {
-        return self.permissions;
+        return self.0;
     }
 }
 
-impl fmt::Display for GenericPageProtectionsConst
+impl fmt::Display for GenericPageProtectionsStruct
 {
     // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
@@ -82,40 +77,6 @@ impl fmt::Display for GenericPageProtectionsConst
     }
 }
 
-// How to diplay the permissions
-// Note: I tried using the Display trait, but it doesn't work well with type aliases
-pub fn display_page_protection(perms: GenericPageProtections) -> String
-{
-    let mut perms_strings: Vec<String> = Vec::new();
-
-    // Check for no access
-    if perms == PageProtection_NoAccess
-    {
-        // Early return
-        return format!("No Access");
-    }
-
-    // Check for read
-    if (perms & PageProtection_Read) == PageProtection_Read
-    {
-        perms_strings.push("Read".to_string());
-    }
-
-    // Check for write
-    if (perms & PageProtection_Write) == PageProtection_Write
-    {
-        perms_strings.push("Write".to_string());
-    }
-
-    // Check for Execute
-    if (perms & PageProtection_Execute) == PageProtection_Execute
-    {
-        perms_strings.push("Execute".to_string());
-    }
-
-    return format!("{}", perms_strings.join(" | "));
-}
-
 // Types
 // Linux:
 //      - present (https://docs.kernel.org/admin-guide/mm/pagemap.html)
@@ -150,7 +111,7 @@ impl fmt::Display for GenericRegionState
 #[derive(Debug)]
 pub struct GenericMemoryRegion
 {
-    pub permissions: GenericPageProtections,
+    pub permissions: GenericPageProtectionsStruct,
     pub state: GenericRegionState,
     pub base_address: usize, // Read it as the absolute virtual addresss in the target virtual space
     pub size_bytes: usize
@@ -162,7 +123,7 @@ impl GenericMemoryRegion
     {
         return GenericMemoryRegion
         {
-            permissions: page_permissions,
+            permissions: GenericPageProtectionsStruct::new(page_permissions),
             state: region_state,
             base_address: page_absolute_address,
             size_bytes: size
@@ -232,7 +193,7 @@ impl GenericProcess
             // 1001 0001 AND 0000 0011 = 0000 0001
             // 0000 0001 == 0000 0011 -> does not match
             // NoAccess matches with everything
-            if (generic_memory_region.permissions & page_permissions) != page_permissions
+            if (generic_memory_region.permissions.get() & page_permissions) != page_permissions
             {
                 // It does not match, skip
                 continue;
@@ -240,7 +201,7 @@ impl GenericProcess
 
             // It it is not empty, check if it matches
             // None matches with anything
-            if (page_permissions_exact != None) && (generic_memory_region.permissions != *page_permissions_exact.as_ref().unwrap())
+            if (page_permissions_exact != None) && (generic_memory_region.permissions.get() != *page_permissions_exact.as_ref().unwrap())
             {
                 // It does not match, skip
                 continue;
@@ -454,7 +415,7 @@ mod tests
         let mut permision_combine = PageProtection_Read;
         for region in result_value
         {
-            permision_combine = permision_combine & region.permissions;
+            permision_combine = permision_combine & region.permissions.get();
         }
 
         assert_eq!( PageProtection_Read, permision_combine);
@@ -481,7 +442,7 @@ mod tests
         let mut permision_combine = PageProtection_Read;
         for region in result_value
         {
-            permision_combine = permision_combine & region.permissions;
+            permision_combine = permision_combine & region.permissions.get();
         }
 
         assert_eq!( PageProtection_Read, permision_combine);
@@ -539,7 +500,7 @@ mod tests
         let mut permision_combine = PageProtection_Execute;
         for region in &result_value
         {
-            permision_combine = permision_combine & region.permissions;
+            permision_combine = permision_combine & region.permissions.get();
         }
         assert_eq!( PageProtection_Execute, permision_combine);
     }
@@ -583,28 +544,28 @@ mod tests
     fn TestDisplayPagePermissions()
     {
         // Read only
-        assert_eq!("Read", display_page_protection(PageProtection_Read));
+        assert_eq!( "Read", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Read)) );
 
         // Read Write
-        assert_eq!("Read | Write", display_page_protection(PageProtection_Write | PageProtection_Read));
+        assert_eq!( "Read | Write", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Write | PageProtection_Read)) );
 
         // Read Write Execute
-        assert_eq!("Read | Write | Execute", display_page_protection(PageProtection_Execute | PageProtection_Write | PageProtection_Read));
+        assert_eq!( "Read | Write | Execute", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Execute | PageProtection_Write | PageProtection_Read)) );
 
         // Read Execute
-        assert_eq!("Read | Execute", display_page_protection(PageProtection_Execute | PageProtection_Read));
+        assert_eq!( "Read | Execute", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Execute | PageProtection_Read)) );
 
         // Write Execute
-        assert_eq!("Write | Execute", display_page_protection(PageProtection_Execute | PageProtection_Write));
+        assert_eq!( "Write | Execute", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Execute | PageProtection_Write)) );
 
         // Execute only
-        assert_eq!("Execute", display_page_protection(PageProtection_Execute));
+        assert_eq!( "Execute", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Execute)) );
 
         // Write only
-        assert_eq!("Write", display_page_protection(PageProtection_Write));
+        assert_eq!( "Write", format!("{}", GenericPageProtectionsStruct::new(PageProtection_Write)) );
 
         // No Access
-        assert_eq!("No Access", display_page_protection(PageProtection_NoAccess));
+        assert_eq!( "No Access", format!("{}", GenericPageProtectionsStruct::new(PageProtection_NoAccess)) );
     }
 
     #[test]
@@ -614,12 +575,5 @@ mod tests
         assert_eq!("Free", format!("{}", GenericRegionState::Free));
         assert_eq!("OnlyMapped", format!("{}", GenericRegionState::OnlyMapped));
         assert_eq!("Invalid", format!("{}", GenericRegionState::Invalid));
-    }
-
-    #[test]
-    fn TestPageProtectionTest()
-    {
-        println!("{}", GenericPageProtectionsConst::new( GenericPageProtectionsConst::PageProtection_Read | GenericPageProtectionsConst::PageProtection_Write ));
-        assert!(false);
     }
 }
