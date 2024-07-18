@@ -32,6 +32,10 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericOSInt
             if (start_pos + target_value_size_bytes) > region.size_bytes
             {
                 // If so, the thread will have no work assigned
+                // (0, 0) represents not work, since a 0..0 (non-inclusive) represents nothing
+                // In this case, it doesn't loop
+                // This is done, so each index in the queue are directly associated to a memory region
+                threads_workload_queues[thread_id].push( (0, 0) );
                 continue;
             }
 
@@ -88,6 +92,10 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<G
             if (start_pos + target_value_size_bytes) > region.size_bytes
             {
                 // If so, the thread will have no work assigned
+                // (0, 0) represents not work, since a 0..0 (non-inclusive) represents nothing
+                // In this case, it creates an empty slice
+                // This is done, so each index in the queue are directly associated to a memory region
+                threads_workload_queues[thread_id].push( (0, 0) );
                 continue;
             }
 
@@ -198,7 +206,7 @@ mod tests
 
         // Thread 0 gets to read everything in one go - avoid out of bounds read
         // Thread 1 gets no work
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![(0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -217,7 +225,7 @@ mod tests
         // Thread 0 needs to stope the search before his private segment ends - avoid out of bounds read
         // Pos 2 - reads current and the next 5 bytes
         // Thread 1 gets no work
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,3)], vec![] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,3)], vec![(0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -234,7 +242,7 @@ mod tests
         println!("Workload: {:?}", workload);
 
         // Some threads will not get some work
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![(1,2)], vec![(2,3)], vec![(3,4)], vec![], vec![] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![(1,2)], vec![(2,3)], vec![(3,4)], vec![(0,0)], vec![(0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -250,7 +258,7 @@ mod tests
 
         println!("Workload: {:?}", workload);
 
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![], vec![], vec![], vec![] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,0)], vec![(0,0)], vec![(0,0)], vec![(0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -289,7 +297,7 @@ mod tests
         // Thread 0 will read all the buffers
         // Thread 1 and 2 will not read the second one
         // Thread 3 will only read the third one
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,250), (0,1), (0,4)], vec![(250,500), (4,8)], vec![(500,750), (8,9)], vec![(750,993)] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,250), (0,1), (0,4)], vec![(250,500), (0,0), (4,8)], vec![(500,750), (0,0), (8,9)], vec![(750,993), (0,0), (0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -344,7 +352,7 @@ mod tests
         // It doesn't mean that it iterates 8 time
         // It means that it will take a slice of 8 bytes (0..8) - Non inclusive
         // The function that receives the slice is the one going to decide how many iterations
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,8)], vec![] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,8)], vec![(0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -363,7 +371,7 @@ mod tests
         // It doesn't mean that it iterates 8 time
         // It means that it will take a slice of 8 bytes (0..8) - Non inclusive
         // The function that receives the slice is the one going to decide how many iterations
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,8)], vec![] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,8)], vec![(0,0)] ];
 
         assert_eq!(expected, workload);
     }
@@ -380,7 +388,7 @@ mod tests
         println!("Workload: {:?}", workload);
 
         // Some threads will not get some work
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![(1,2)], vec![(2,3)], vec![(3,4)], vec![], vec![]];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![(1,2)], vec![(2,3)], vec![(3,4)], vec![(0,0)], vec![(0,0)]];
 
         assert_eq!(expected, workload);
     }
@@ -397,7 +405,7 @@ mod tests
         println!("Workload: {:?}", workload);
 
         // Some threads will not get some work
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![], vec![], vec![], vec![]];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,0)], vec![(0,0)], vec![(0,0)], vec![(0,0)]];
 
         assert_eq!(expected, workload);
     }
@@ -435,7 +443,7 @@ mod tests
         // Thread 0 will read all the buffers
         // Thread 1 and 2 will not read the second one
         // Thread 3 will only read the third one
-        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,257), (0,8), (0,11)], vec![(250,507), (4,15)], vec![(500,757), (8,16)], vec![(750,1000)] ];
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,257), (0,8), (0,11)], vec![(250,507), (0,0), (4,15)], vec![(500,757), (0,0), (8,16)], vec![(750,1000), (0,0), (0,0)] ];
 
         assert_eq!(expected, workload);
     }
