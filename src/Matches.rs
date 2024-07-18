@@ -1,8 +1,8 @@
-
+use std::mem::size_of;
 use crate::GenericOSInterface;
 
 // It represents the matches related to a particular memory region
-pub struct Matches
+pub struct AddressMatches
 {
     mem_region: GenericOSInterface::GenericMemoryRegion,
 
@@ -16,11 +16,11 @@ pub enum MatchDisplayStyle
     Hex
 }
 
-impl Matches
+impl AddressMatches
 {
-    pub fn new(memory_region: GenericOSInterface::GenericMemoryRegion, matches_addresses: Vec<usize>) -> Matches
+    pub fn new(memory_region: GenericOSInterface::GenericMemoryRegion, matches_addresses: Vec<usize>) -> AddressMatches
     {
-        return Matches
+        return AddressMatches
         {
             mem_region: memory_region,
             matches: matches_addresses
@@ -63,8 +63,11 @@ impl Matches
             // # -> selects the mode
             // X -> high case hex
             // 0 -> it has trailing zeros
-            // 16 -> minimum of 16 characters
-            addresses_in_hex.push( format!("{:#016X}", addr) );
+            // 1$ -> the minimum num of chars is given to the function (in this case, it is based on the size of usize)
+            //  Basing the representation on the size of usize is more portable
+            // * 2: each byte is represented by 2 hex characters
+            // + 2: the "0x" was also counted in, se we offset it
+            addresses_in_hex.push( format!("{:#01$X}", addr, (size_of::<usize>()) * 2 + 2) );
         }
 
         return addresses_in_hex;
@@ -73,14 +76,13 @@ impl Matches
     pub fn display_matches(&self, display_style: MatchDisplayStyle) -> String
     {
         // Memory region info
-        // TODO implement Display on those types
         let mut mem_region_string = "".to_string();
 
         mem_region_string += format!("Memory region \n").as_str();
         mem_region_string += format!("-> Permissions: {} \n", self.mem_region.permissions).as_str();
         mem_region_string += format!("-> State: {} \n", self.mem_region.state).as_str();
-        mem_region_string += format!("-> Size (bytes): {} \n", self.mem_region.size_bytes).as_str();
         mem_region_string += format!("-> Base address: {} \n", self.mem_region.base_address).as_str();
+        mem_region_string += format!("-> Size (bytes): {} \n", self.mem_region.size_bytes).as_str();
         mem_region_string += format!("\n").as_str();
 
         // Addresses
@@ -123,7 +125,7 @@ mod tests
     // Import the current module to all tests
     use crate::Matches::*;
 
-    // Does the attach method check for errors and return the handle on success?
+    #[ignore]
     #[test]
     fn TestMatches()
     {
@@ -133,9 +135,61 @@ mod tests
             0,
             1000);
 
-        let match_obj = Matches::new(memory_region, vec![0, 10, 25, 15] );
+        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 25, 15] );
 
         println!("{}", match_obj.display_matches(MatchDisplayStyle::Hex));
         assert!( false );
+    }
+
+    #[test]
+    fn TestMatches_AbsoluteAddressCalculation()
+    {
+        let memory_region = GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000);
+
+        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 25, 15] );
+
+        assert_eq!( match_obj.get_absolute_addresses(), vec![0, 10, 25, 15] );
+
+        let memory_region = GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            100,
+            1000);
+
+        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 25, 15] );
+
+        assert_eq!( match_obj.get_absolute_addresses(), vec![100, 110, 125, 115] );
+    }
+
+    #[test]
+    fn TestMatches_AbsoluteAddress_HexStyle()
+    {
+        let memory_region = GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000);
+
+        let match_obj = AddressMatches::new(memory_region, vec![0, 1, 255] );
+
+        assert_eq!( match_obj.get_absolute_addresses_hex(), vec!["0x0000000000000000".to_string(), "0x0000000000000001".to_string(), "0x00000000000000FF".to_string()] );
+    }
+
+    #[test]
+    fn TestMatches_AbsoluteAddress_DecimalStyle()
+    {
+        let memory_region = GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000);
+
+        let match_obj = AddressMatches::new(memory_region, vec![0, 1, 255] );
+
+        assert_eq!( match_obj.get_absolute_addresses_decimal(), vec!["0".to_string(), "1".to_string(), "255".to_string()] );
     }
 }
