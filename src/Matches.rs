@@ -2,12 +2,13 @@ use std::mem::size_of;
 use crate::GenericOSInterface;
 
 // It represents the matches related to a particular memory region
+#[derive(Clone)]
 pub struct AddressMatches
 {
-    mem_region: GenericOSInterface::GenericMemoryRegion,
+    pub mem_region: GenericOSInterface::GenericMemoryRegion,
 
     // Remember that all of the matches are RELATIVE to the region!
-    matches: Vec<usize>
+    pub matches: Vec<usize>
 }
 
 pub enum MatchDisplayStyle

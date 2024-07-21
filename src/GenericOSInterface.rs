@@ -25,6 +25,7 @@ pub const PageProtection_Execute: u32 =  0b00000000_00000000_00000000_00000100_u
 // A type associated to the page protections
 // This is done so we can have associated methods
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct GenericPageProtectionsStruct(GenericPageProtections);
 
 impl GenericPageProtectionsStruct
@@ -85,6 +86,7 @@ impl fmt::Display for GenericPageProtectionsStruct
 //      - commited (https://learn.microsoft.com/en-us/windows/win32/memory/page-state)
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub enum GenericRegionState
 {
     Resident, // It is in physical memmory
@@ -109,6 +111,7 @@ impl fmt::Display for GenericRegionState
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct GenericMemoryRegion
 {
     pub permissions: GenericPageProtectionsStruct,

@@ -1,4 +1,5 @@
 use crate::GenericOSInterface;
+use crate::Matches;
 
 // It return the positions in which the thread will iterate over
 // It is important to share information about the regions, so it can in ONE loop create the thread task queue
@@ -16,7 +17,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericOSInt
     {
         // Calculate the segment size for each thread
         // A segment is a private memory region that the thread will use for its search
-        // The value needs to be rounded to the highest integer to avoid reounding to zero (there is no size 0)
+        // The value needs to be rounded to the highest integer to avoid rounding to zero (there is no size 0)
         // 0.5 -> 0 (invalid rounding)
         // 0.5 -> 1 (correct response)
         let segment_size: usize = region.size_bytes.div_ceil(num_threads);
@@ -34,7 +35,7 @@ fn partition_thread_workload_equal(num_threads: usize, regions: Vec<GenericOSInt
                 // If so, the thread will have no work assigned
                 // (0, 0) represents not work, since a 0..0 (non-inclusive) represents nothing
                 // In this case, it doesn't loop
-                // This is done, so each index in the queue are directly associated to a memory region
+                // This is done, so each index in the queue are directly associated to a memory region (making it easier to merge search results)
                 threads_workload_queues[thread_id].push( (0, 0) );
                 continue;
             }
@@ -77,7 +78,7 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<G
     {
         // Calculate the segment size for each thread
         // A segment is a private memory region that the thread will use for its search
-        // The value needs to be rounded to the highest integer to avoid reounding to zero (there is no size 0)
+        // The value needs to be rounded to the highest integer to avoid rounding to zero (there is no size 0)
         // 0.5 -> 0 (invalid rounding)
         // 0.5 -> 1 (correct response)
         let segment_size: usize = region.size_bytes.div_ceil(num_threads);
@@ -94,7 +95,7 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<G
                 // If so, the thread will have no work assigned
                 // (0, 0) represents not work, since a 0..0 (non-inclusive) represents nothing
                 // In this case, it creates an empty slice
-                // This is done, so each index in the queue are directly associated to a memory region
+                // This is done, so each index in the queue are directly associated to a memory region (making it easier to merge search results)
                 threads_workload_queues[thread_id].push( (0, 0) );
                 continue;
             }
@@ -120,20 +121,63 @@ fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: Vec<G
     return threads_workload_queues;
 }
 
-// This partitions the resutlts between all threads
 // It should be used for filter operations
-/*
-fn partition_thread_workload_equal_slice_view(num_threads: usize, matches_addresses: Vec<Matches>) -> Vec< Vec<(usize, usize)> >
+// This partitions each memory region's matches between all threads
+// It returns a slice of the matches that shloud be searched
+fn partition_thread_workload_equal_slice_view_filter(num_threads: usize, matches_addresses: Vec<Matches::AddressMatches>) -> Vec< Vec<(usize, usize)> >
 {
-    
+    // This holds the start and end of each thread task in private a queue
+    // threads_workload_queues[0] -> thread 0 queue
+    //    [(0, 10), (10, 20),...] - non inclusive end
+    // threads_workload_queues[1] -> thread 1 queue
+    let mut threads_workload_queues: Vec< Vec<(usize, usize)> > = vec![Vec::new(); num_threads];
+
+    // Iterate over every region - tasks are per contiguous memory region
+    for region_match in matches_addresses
+    {
+        // Calculate how many addresses each thread will have
+        // The value needs to be rounded to the highest integer to avoid rounding to zero (there is no size 0)
+        // 0.5 -> 0 (invalid rounding)
+        // 0.5 -> 1 (correct response)
+        let addrs_per_thread: usize = region_match.matches.len().div_ceil(num_threads);
+
+        for thread_id in 0..num_threads
+        {
+            // Calculate the slice
+            let start_pos = addrs_per_thread * thread_id;
+
+            // Does the start extrapolate the buffer?
+            if start_pos >= region_match.matches.len()
+            {
+                // Yes, then assing "no work"
+                threads_workload_queues[thread_id].push( (0, 0) );
+                continue;
+            }
+
+            let mut end_pos = start_pos + addrs_per_thread;
+
+            // Does the end extrapolate the buffer?
+            if end_pos > region_match.matches.len()
+            {
+                // Yes, then ajust it to the buffer end
+                end_pos = region_match.matches.len();
+            }
+
+            // Everything is ok
+            // Assign work to each thread in its repective queue
+            threads_workload_queues[thread_id].push( (start_pos, end_pos) );
+        }
+    }
+    return threads_workload_queues;
 }
-*/
+
 
 #[cfg(test)]
 mod tests
 {
     // Import the current module to all tests
     use crate::WorkloadPartitioning::*;
+    use crate::Matches::*;
 
     fn CreateFakeMemoryRegion(size: usize) -> GenericOSInterface::GenericMemoryRegion
     {
@@ -447,4 +491,89 @@ mod tests
 
         assert_eq!(expected, workload);
     }
+
+    #[test]
+    fn TestWorkloadPartitioningEqual_SliceView_Filter_RegularCase()
+    {
+        let num_threads = 2;
+        let memory_region = CreateFakeMemoryRegion(100);
+
+        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 15, 25] );
+
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, vec![match_obj]);
+
+        println!("Workload: {:?}", workload);
+
+        // Each thread gets half of the results array
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,2)], vec![(2,4)] ];
+
+        assert_eq!(expected, workload);
+    }
+
+    #[test]
+    fn TestWorkloadPartitioningEqual_SliceView_Filter_MoreThreadsThanWork()
+    {
+        let num_threads = 6;
+        let memory_region = CreateFakeMemoryRegion(100);
+
+        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 15, 25] );
+
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, vec![match_obj]);
+
+        println!("Workload: {:?}", workload);
+
+        // Each thread gets to read a single address match
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1)], vec![(1,2)], vec![(2,3)], vec![(3,4)], vec![(0,0)], vec![(0,0)] ];
+
+        assert_eq!(expected, workload);
+    }
+
+    #[test]
+    fn TestWorkloadPartitioningEqual_SliceView_Filter_MoreThreadsThanWork_MultipleAsymetricalResults()
+    {
+        let num_threads = 6;
+        let memory_region = CreateFakeMemoryRegion(100);
+
+        let matches_obj = vec![AddressMatches::new(memory_region.clone(), vec![0, 1, 2, 3, 4]),
+                               AddressMatches::new(memory_region.clone(), vec![0, 1]),
+                               AddressMatches::new(memory_region.clone(), vec![0, 1, 2, 3, 4, 5])
+                              ];
+
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, matches_obj);
+
+        println!("Workload: {:?}", workload);
+
+        // Index starts at 0
+        // Result 0 is not read by thread 5
+        // Result 1 is only read byt threads 0 and 1
+        // Result 2 is read by everyone
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,1), (0,1), (0,1)],
+                                                         vec![(1,2), (1,2), (1,2)],
+                                                         vec![(2,3), (0,0), (2,3)],
+                                                         vec![(3,4), (0,0), (3,4)],
+                                                         vec![(4,5), (0,0), (4,5)],
+                                                         vec![(0,0), (0,0), (5,6)]
+                                                        ];
+
+        assert_eq!(expected, workload);
+    }
+
+    #[test]
+    fn TestWorkloadPartitioningEqual_SliceView_Filter_RegularCase_MultipleRegions()
+    {
+        let num_threads = 2;
+        let memory_region = CreateFakeMemoryRegion(100);
+
+        let matches_obj = vec![AddressMatches::new(memory_region, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); 3];
+
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, matches_obj);
+
+        println!("Workload: {:?}", workload);
+
+        // Each thread gets half of the results array
+        let expected: Vec< Vec<(usize, usize)> > = vec![ vec![(0,5), (0,5), (0,5)], vec![(5,10), (5,10), (5,10)] ];
+
+        assert_eq!(expected, workload);
+    }
+
 }
