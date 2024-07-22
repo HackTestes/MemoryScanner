@@ -495,14 +495,14 @@ pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_addres
 {
     // Success?
     // Erros will be sent based on the input address
-    if absolute_vm_address == 0
+    if absolute_vm_address == 999999
     {
         // No
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
     // It was successful, but it only made a partial copy
-    if absolute_vm_address == 1
+    if absolute_vm_address == 999998
     {
         // Write only to the middle to simulate a partial copy
         for i in 0..buffer.len()/2
@@ -516,7 +516,7 @@ pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_addres
     // It was a success, so write into the buffer to simulate a read
     for i in 0..buffer.len()
     {
-        buffer[i] = 1;
+        buffer[i] = i as u8;
     }
 
     return Ok(());

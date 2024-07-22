@@ -134,6 +134,7 @@ impl GenericMemoryRegion
     }
 }
 
+
 // It represents a single ATTACHED process
 // Attaching early is important to avoid process ID race conditions
 // Example: you pass PID 50 and attach to it
@@ -254,6 +255,40 @@ impl GenericProcess
             Err(error) => return Err(error)
         };
     }
+
+    // Builds a snapshot of the process memory based on certain regions and buffer size
+    // On seccess, it resturn the amount of regions that were copied to the buffer, so the caller can ajust the parameters and retry the copy with the remaining regions
+    // _bounded: it respects the limit of the buffer
+    pub fn snapshot_bounded(&self, target_mem_regions: &[GenericMemoryRegion], buffer: &mut [u8]) -> Result<usize, GenericOSErrors>
+    {
+        let mut copies_done: usize = 0;
+        let max_space = buffer.len();
+        let mut space_used: usize = 0;
+
+        // Only iterate over the REAMAINING regions (so offset it by the start pos)
+        for region in target_mem_regions
+        {
+            // Does it fit in the remaining space?
+            if region.size_bytes + space_used < max_space
+            {
+                // Yes, then make the copy
+                // Offset the buffer by the spaced used by the other copies
+                let result = self.read_from_vm(region.base_address, &mut buffer[space_used..(space_used+region.size_bytes)]);
+
+                match result
+                {
+                    Ok(_) => (),
+                    Err(error) => return Err(error)
+                };
+
+                // Update the control info
+                copies_done += 1;
+                space_used += region.size_bytes;
+            }
+        }
+
+        return Ok(copies_done);
+    }
 }
 
 
@@ -303,7 +338,7 @@ mod tests
         assert!(matches!( operation_result, Ok(()) ));
 
         // Was the buffer written?
-        assert_eq!(buffer, vec![1; 100]);
+        assert_eq!(buffer, (0..100).collect::<Vec<u8>>());
     }
 
     #[test]
@@ -314,7 +349,7 @@ mod tests
 
         let process = GenericProcess::attach(1).unwrap();
 
-        let operation_result = process.read_from_vm(1, &mut buffer[0..]);
+        let operation_result = process.read_from_vm(999998, &mut buffer[0..]);
 
         println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
 
@@ -336,7 +371,7 @@ mod tests
 
         let process = GenericProcess::attach(1).unwrap();
 
-        let operation_result = process.read_from_vm(0, &mut buffer[0..]);
+        let operation_result = process.read_from_vm(999999, &mut buffer[0..]);
 
         println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
 
@@ -578,5 +613,39 @@ mod tests
         assert_eq!("Free", format!("{}", GenericRegionState::Free));
         assert_eq!("OnlyMapped", format!("{}", GenericRegionState::OnlyMapped));
         assert_eq!("Invalid", format!("{}", GenericRegionState::Invalid));
+    }
+
+    #[test]
+    fn TestProcessSnapshot()
+    {
+        // Start a zeroed buffer of 100 items
+        let mut buffer: Vec<u8> = vec![0; 10000];
+
+        let process = GenericProcess::attach(1).unwrap();
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+
+        println!("Memory regions: {:?}", memory_regions);
+        println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+        // Did it succeed?
+        assert!(matches!( snapshot_result, Ok(10) ));
+
+        // Was the buffer written?
+        let mut expect: Vec<u8> = (0..100).collect();
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut vec![0; 9000]);
+
+        assert_eq!(buffer, expect);
     }
 }
