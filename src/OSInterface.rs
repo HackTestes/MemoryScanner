@@ -516,6 +516,8 @@ pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_addres
     // It was a success, so write into the buffer to simulate a read
     for i in 0..buffer.len()
     {
+        // u8 might lose some bits of the original value,
+        // but it helps to track if the region limits are beging resepected
         buffer[i] = i as u8;
     }
 
