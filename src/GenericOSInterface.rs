@@ -7,7 +7,8 @@ pub enum GenericOSErrors
     GenericFail, // If you don't want to specify the type of error (useful when you don't have good error reporting). It simply means "something went wrong"
     ProcessDoesntExist,
     PermissionDenied,
-    PartialReadCopy // Only copied part of the buffer
+    PartialReadCopy, // Only copied part of the buffer
+    SnapshotBufferIsTooSmall
 }
 
 // Each bit represent a specific permission
@@ -269,7 +270,7 @@ impl GenericProcess
         for region in target_mem_regions
         {
             // Does it fit in the remaining space?
-            if region.size_bytes + space_used < max_space
+            if region.size_bytes + space_used <= max_space
             {
                 // Yes, then make the copy
                 // Offset the buffer by the spaced used by the other copies
@@ -285,6 +286,12 @@ impl GenericProcess
                 copies_done += 1;
                 space_used += region.size_bytes;
             }
+        }
+
+        // Check for regions too big that no copy was done
+        if (target_mem_regions.len() != 0) && (copies_done == 0)
+        {
+            return Err(GenericOSErrors::SnapshotBufferIsTooSmall);
         }
 
         return Ok(copies_done);
@@ -647,5 +654,69 @@ mod tests
         expect.append(&mut vec![0; 9000]);
 
         assert_eq!(buffer, expect);
+    }
+
+    #[test]
+    fn TestProcessSnapshot_BufferReuse()
+    {
+        // Start a zeroed buffer of 100 items
+        let mut buffer: Vec<u8> = vec![0; 900];
+
+        let process = GenericProcess::attach(1).unwrap();
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let mut snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+
+        println!("Memory regions: {:?}", memory_regions);
+        println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+        // Did it succeed?
+        assert!(matches!( snapshot_result, Ok(9) ));
+        let copies_done = snapshot_result.unwrap();
+
+        // Was the buffer written?
+        let mut expect: Vec<u8> = (0..100).collect();
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        expect.append(&mut (0..100).collect());
+        assert_eq!(buffer, expect);
+
+        // Reset buffer
+        buffer.fill(0);
+        assert_eq!(buffer, vec![0; 900]);
+
+        snapshot_result = process.snapshot_bounded(&memory_regions[copies_done..], &mut buffer[0..]);
+
+        // Did it succeed?
+        assert!(matches!( snapshot_result, Ok(1) ));
+
+        expect = (0..100).collect();
+        expect.append(&mut vec![0; 800]);
+        assert_eq!(buffer, expect);
+    }
+
+    #[test]
+    fn TestProcessSnapshot_BufferTooSmall()
+    {
+        // Start a zeroed buffer of 100 items
+        let mut buffer: Vec<u8> = vec![0; 1];
+
+        let process = GenericProcess::attach(1).unwrap();
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+
+        println!("Memory regions: {:?}", memory_regions);
+        println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+        // Did it succeed?
+        assert!(matches!( snapshot_result, Err(GenericOSErrors::SnapshotBufferIsTooSmall) ));
     }
 }
