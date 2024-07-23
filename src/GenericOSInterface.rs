@@ -1,4 +1,14 @@
-use crate::OSInterface;
+
+// This conditional dependencies help me run tests in the OS dependent interfaces
+// The previous method of putting everything in the same file would have no tests for type conversion
+#[cfg(not(test))]
+#[cfg(target_os = "windows")]
+use crate::WindowsOSInterface;
+
+// Use the test interface when we run tests here
+#[cfg(test)]
+use crate::TestOSInterface as OSInterface;
+
 use std::fmt;
 
 #[derive(Debug)]
@@ -27,6 +37,7 @@ pub const PageProtection_Execute: u32 =  0b00000000_00000000_00000000_00000100_u
 // This is done so we can have associated methods
 #[derive(Debug)]
 #[derive(Clone)]
+#[derive(Eq, PartialEq)]
 pub struct GenericPageProtectionsStruct(GenericPageProtections);
 
 impl GenericPageProtectionsStruct
@@ -86,7 +97,7 @@ impl fmt::Display for GenericPageProtectionsStruct
 // Windows
 //      - commited (https://learn.microsoft.com/en-us/windows/win32/memory/page-state)
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Eq, PartialEq)]
 #[derive(Clone)]
 pub enum GenericRegionState
 {
@@ -113,6 +124,7 @@ impl fmt::Display for GenericRegionState
 
 #[derive(Debug)]
 #[derive(Clone)]
+#[derive(Eq, PartialEq)]
 pub struct GenericMemoryRegion
 {
     pub permissions: GenericPageProtectionsStruct,

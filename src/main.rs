@@ -10,6 +10,9 @@ mod WorkloadPartitioning;
 mod SearchEngines;
 mod GenericOSInterface;
 mod OSInterface;
+mod Matches;
+mod TestOSInterface;
+mod WindowsOSInterface;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,

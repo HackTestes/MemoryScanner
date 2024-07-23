@@ -1,4 +1,4 @@
-// Bring the generic inteface so we can translate specific to generic
+/*// Bring the generic inteface so we can translate specific to generic
 use crate::GenericOSInterface;
 
 use std::os::raw::c_void;
@@ -523,3 +523,5 @@ pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_addres
 
     return Ok(());
 }
+
+*/
