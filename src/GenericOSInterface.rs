@@ -3,7 +3,7 @@
 // The previous method of putting everything in the same file would have no tests for type conversion
 #[cfg(not(test))]
 #[cfg(target_os = "windows")]
-use crate::WindowsOSInterface;
+use crate::WindowsOSInterface as OSInterface;
 
 // Use the test interface when we run tests here
 #[cfg(test)]
@@ -11,6 +11,7 @@ use crate::TestOSInterface as OSInterface;
 
 use std::fmt;
 
+#[derive(PartialEq)]
 #[derive(Debug)]
 pub enum GenericOSErrors
 {
@@ -278,7 +279,6 @@ impl GenericProcess
         let max_space = buffer.len();
         let mut space_used: usize = 0;
 
-        // Only iterate over the REAMAINING regions (so offset it by the start pos)
         for region in target_mem_regions
         {
             // Does it fit in the remaining space?
@@ -308,6 +308,67 @@ impl GenericProcess
 
         return Ok(copies_done);
     }
+
+    // It returns the copy operations that will be necessary to create a snapshot and which region to start, given a buffer size
+    // This also has the advantage of being able to do "look-ahead" and warn if all regions can be fit in the buffer (insted of doing it during the search)
+    // Why not use an Iterator? I tried and it didn't work
+    //     1. Allocating a buffer and returning it to the caller: this kills the idea of being able to
+    //     reuse a buffer and remove unecessary deallocations and allocations
+    //
+    //     2. Borrowing a buffer: it breaks the code and doesn't allow any code to access the buffer in the loop
+    //
+    //     3. Arc: doesn't allow writes without UnsafeRefCell
+    pub fn get_snapshot_workload(target_mem_regions: &[GenericMemoryRegion], buffer_size: usize) -> Result<Vec<usize>, GenericOSErrors>
+    {
+        let mut copy_operations: Vec<usize> = vec![];
+        let mut copies_done: usize = 0;
+        let mut space_used: usize = 0;
+
+        for (region_idx, region) in target_mem_regions.iter().enumerate()
+        {
+            // Does it fit in the remaining space?
+            if (region.size_bytes + space_used <= buffer_size)
+            {
+                // Yes
+                // Only add fresh copies
+                if copies_done == 0
+                {
+                    copy_operations.push(region_idx);
+                }
+
+                // Update the control info
+                copies_done += 1;
+                space_used += region.size_bytes;
+                continue;
+            }
+
+            // It doesn't fit anymore, we need to start a new operation
+            copies_done = 0;
+            space_used = 0;
+
+            // Does it fit in the next one?
+            // I do this to not lose the region of this iteration
+            if region.size_bytes + space_used <= buffer_size
+            {
+                // Yes
+                // This will always be a fresh copy, because of the reset just above
+                copy_operations.push(region_idx);
+
+                // Update the control info
+                copies_done += 1;
+                space_used += region.size_bytes;
+                continue;
+            }
+
+            else if copies_done == 0
+            {
+                return Err(GenericOSErrors::SnapshotBufferIsTooSmall);
+            }
+        }
+
+        return Ok(copy_operations);
+    }
+
 }
 
 
@@ -316,7 +377,6 @@ mod tests
 {
     // Import the current module to all tests
     use crate::GenericOSInterface::*;
-    use crate::OSInterface::*;
 
     // Does the attach method check for errors and return the handle on success?
     #[test]
@@ -731,4 +791,58 @@ mod tests
         // Did it succeed?
         assert!(matches!( snapshot_result, Err(GenericOSErrors::SnapshotBufferIsTooSmall) ));
     }
+
+    #[test]
+    fn TestProcessSnapshotIter()
+    {
+        // Start a zeroed buffer of 100 items
+        let mut buffer: Vec<u8> = vec![0; 500];
+
+        let process = GenericProcess::attach(1).unwrap();
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let snapshot_workload = GenericProcess::get_snapshot_workload(&memory_regions[0..], buffer.len());
+
+        let expected_work: Vec<usize> = vec![0, 5];
+        assert_eq!(Ok(expected_work), snapshot_workload);
+    
+        for start_pos in snapshot_workload.unwrap()
+        {
+            let snapshot_result = process.snapshot_bounded(&memory_regions[(start_pos)..], &mut buffer[0..]);
+
+            println!("Memory regions: {:?}", memory_regions.len());
+            println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+            if (snapshot_result == Err(GenericOSErrors::GenericFail)) || (snapshot_result == Ok(0))
+            {
+                // This shopuld happen at all with the workload calculation
+                assert!(false);
+            }
+
+            // Was the buffer written?
+            let mut expect: Vec<u8> = (0..100).collect();
+            expect.append(&mut (0..100).collect());
+            expect.append(&mut (0..100).collect());
+            expect.append(&mut (0..100).collect());
+            expect.append(&mut (0..100).collect());
+            assert_eq!(buffer, expect);
+        }
+    }
+
+    #[test]
+    fn TestProcessSnapshotIterFail()
+    {
+        // Start a zeroed buffer of 100 items
+        let mut buffer: Vec<u8> = vec![0; 10];
+
+        let process = GenericProcess::attach(1).unwrap();
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let snapshot_workload = GenericProcess::get_snapshot_workload(&memory_regions[0..], buffer.len());
+
+        assert_eq!(Err(GenericOSErrors::SnapshotBufferIsTooSmall), snapshot_workload);
+    }
+
 }

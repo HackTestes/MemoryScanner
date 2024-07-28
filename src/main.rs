@@ -9,7 +9,6 @@ mod ThreadPool;
 mod WorkloadPartitioning;
 mod SearchEngines;
 mod GenericOSInterface;
-mod OSInterface;
 mod Matches;
 mod TestOSInterface;
 mod WindowsOSInterface;
