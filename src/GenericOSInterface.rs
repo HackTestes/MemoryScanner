@@ -324,8 +324,13 @@ impl GenericProcess
         let mut copies_done: usize = 0;
         let mut space_used: usize = 0;
 
-        for (region_idx, region) in target_mem_regions.iter().enumerate()
+        let mut region_idx = 0;
+
+        // Loop over the regions
+        while region_idx < target_mem_regions.len()
         {
+            let region = &target_mem_regions[region_idx];
+
             // Does it fit in the remaining space?
             if (region.size_bytes + space_used <= buffer_size)
             {
@@ -339,27 +344,21 @@ impl GenericProcess
                 // Update the control info
                 copies_done += 1;
                 space_used += region.size_bytes;
+                region_idx += 1;
                 continue;
             }
 
             // It doesn't fit anymore, we need to start a new operation
-            copies_done = 0;
-            space_used = 0;
-
-            // Does it fit in the next one?
-            // I do this to not lose the region of this iteration
-            if region.size_bytes + space_used <= buffer_size
+            else if copies_done != 0
             {
-                // Yes
-                // This will always be a fresh copy, because of the reset just above
-                copy_operations.push(region_idx);
+                copies_done = 0;
+                space_used = 0;
 
-                // Update the control info
-                copies_done += 1;
-                space_used += region.size_bytes;
+                // Replay the iteration with a "new buffer", so don't add to the region_idx
                 continue;
             }
 
+            // It didn't fit anything, therefore the buffer is too small
             else if copies_done == 0
             {
                 return Err(GenericOSErrors::SnapshotBufferIsTooSmall);
