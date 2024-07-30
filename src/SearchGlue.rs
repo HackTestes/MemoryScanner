@@ -40,8 +40,8 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     process_handle: GenericOSInterface::GenericProcess,
     num_threads: usize,
     buffer_size: usize,
+    thread_private_store_size: usize,
     thread_task: fn(&[u8], usize, Vec<(String, T)>, usize) -> Vec<usize>,
-//    target_type: TargetType,
     operations: Vec<(String, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
 {
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
@@ -89,24 +89,6 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
         let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<T>());
 
-        /*let mut thread_workload = match target_type
-        {
-            TargetType::f32 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<f32>()),
-            TargetType::f64 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<f64>()),
-
-            TargetType::i8 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<i8>()),
-            TargetType::i16 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<i16>()),
-            TargetType::i32 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<i32>()),
-            TargetType::i64 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<i64>()),
-            TargetType::i128 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<i128>()),
-
-            TargetType::u8 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u8>()),
-            TargetType::u16 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u16>()),
-            TargetType::u32 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u32>()),
-            TargetType::u64 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u64>()),
-            TargetType::u128 => WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u128>()),
-        };*/
-
         // Perform the search in parallel
 
         // Make the buffer shareable
@@ -116,7 +98,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         for t_idx in 0..num_threads
         {
             // Each vector is directly associated to a region
-            thread_pool.execute(t_idx, (mem::take(&mut thread_workload[t_idx]), arc_copy_buffer.clone(), 10000, operations.clone(), thread_task), |args| -> Vec< Vec<usize> >
+            thread_pool.execute(t_idx, (mem::take(&mut thread_workload[t_idx]), arc_copy_buffer.clone(), thread_private_store_size, operations.clone(), thread_task), |args| -> Vec< Vec<usize> >
             {
                 // Unpack args
                 let workload = args.0;
@@ -192,11 +174,12 @@ mod tests
         let process = GenericProcess::attach(1).unwrap();
 
         let search_result = StartSearchComparator(
-            PageProtection_NoAccess,
+            PageProtection_Read|PageProtection_Write,
             None,
             None,
             process,
             8,
+            1000,
             1000,
             LinearSearch_Comparator_u32,
             vec![(">".to_string(), 0)]
@@ -204,7 +187,7 @@ mod tests
 
         for region_match in search_result
         {
-            println!("Search: {:?}", region_match.display_matches(MatchDisplayStyle::Decimal));
+            println!("Search: {}", region_match.display_matches(MatchDisplayStyle::Decimal));
         }
 
         assert!(false);
