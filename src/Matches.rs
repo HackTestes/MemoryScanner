@@ -3,6 +3,7 @@ use crate::GenericOSInterface;
 
 // It represents the matches related to a particular memory region
 #[derive(Clone)]
+#[derive(Debug)]
 pub struct AddressMatches
 {
     pub mem_region: GenericOSInterface::GenericMemoryRegion,

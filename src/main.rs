@@ -12,6 +12,7 @@ mod GenericOSInterface;
 mod Matches;
 mod TestOSInterface;
 mod WindowsOSInterface;
+mod SearchGlue;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,

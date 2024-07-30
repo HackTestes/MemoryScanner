@@ -23,6 +23,7 @@ macro_rules! SelectCompareValues
     {
         match $comparison_op.as_str()
         {
+            "!=" => $value_to_check != $target_value,
             "==" => $value_to_check == $target_value,
             ">" => $value_to_check > $target_value,
             "<" => $value_to_check < $target_value,
@@ -44,7 +45,7 @@ macro_rules! Comparator
         // The mem_region_slice holds a partial view of a bigger buffer and of the private segment (thread workload), it represents the slice of memory belonging to a specific region
         // It also prevents the function from reading from another region or private segment in the buffer
         // The slice start is necessary to ajust the results, so it returns an address relative to the memory region
-        fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize) -> Vec<usize>
+        pub fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize) -> Vec<usize>
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
@@ -130,7 +131,7 @@ macro_rules! ComparatorFilter
         // The mem_region_slice holds a partial view of a bigger buffer and of the private segment (thread workload), it represents the slice of memory belonging to a specific region
         // It also prevents the function from reading from another region or private segment in the buffer
         // The slice start is necessary to ajust the results, so it returns an address relative to the memory region
-        fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize, previous_matches: Vec<usize>) -> Vec<usize>
+        pub fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: Vec<(String, $target_type)>, match_buffer_size: usize, previous_matches: Vec<usize>) -> Vec<usize>
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
@@ -271,6 +272,37 @@ mod tests
 
         let start: usize = 0;
         let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+
+        let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, operations, 1000);
+
+        println!("Result: {:?}", result);
+
+        // Did it find the correct start position?
+        let expected: Vec<usize> = vec![25];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn TestSearchEngines_ComparatorUnequal()
+    {
+        let buffer_size = 50;
+        let mut buffer: Vec<u8> = vec![0; buffer_size];
+
+        // Create and insert needle
+        let needle: u8 = 15;
+        let needle_size_bytes: usize = size_of::<u8>();
+        let mut insert_pos = 25;
+        for needle_byte in needle.to_ne_bytes()
+        {
+            buffer[insert_pos] = needle_byte;
+            insert_pos = insert_pos + 1;
+        }
+
+        // Print the current state of the buffer
+        println!("Buffer: {:?}", buffer);
+
+        let start: usize = 0;
+        let operations: Vec<(String, u8)> = vec![("!=".to_string(), 0)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, operations, 1000);
 
