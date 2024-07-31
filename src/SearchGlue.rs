@@ -152,12 +152,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     return Ok(search_results);
 }
 
-/*
-fn FilterSearchComparator(process_handle: GenericOSInterface::GenericProcess, num_threads: usize, buffer_size: usize, target_value: String, target_type: TargetType, previous_results: Matches::AddressMatches) -> Vec<Matches::AddressMatches>
-{
 
-}
-*/
 
 
 #[cfg(test)]
@@ -185,12 +180,19 @@ mod tests
             vec![(">".to_string(), 0)]
         ).unwrap();
 
-        for region_match in search_result
+        for region_match in search_result.iter()
         {
             println!("Search: {}", region_match.display_matches(MatchDisplayStyle::Decimal));
         }
 
-        assert!(false);
+        // This checks not only if the pages are correct, but also that the pages came in order
+        // This is important for the result filter, so min and max operations can be fast
+        let expected: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), (0..=96).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (0..=96).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (0..=96).collect())
+            ];
+        assert_eq!(search_result, expected);
     }
 
     // Measure the time it takes for to get the min/max value
