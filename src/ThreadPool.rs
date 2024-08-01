@@ -180,6 +180,7 @@ pub struct ThreadPool<ARGS, RETURN_STRUCT>
 // Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
 impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
 {
+    // TODO: alert the user that values <=0 should make this function fail
     pub fn new(num_threads: usize) -> ThreadPool<ARGS, RETURN_STRUCT>
     {
         // Thread list - holds the handles to each thread

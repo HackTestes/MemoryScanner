@@ -8,6 +8,7 @@ use std::mem::size_of;
 use std::mem;
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 enum SearchErrors
 {
     something,
@@ -78,16 +79,142 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         let snapshot_result = process_handle.snapshot_bounded(&memory_regions[(start_copy_position)..], &mut copy_buffer[0..]);
 
         // Check for errors
-        match snapshot_result
+        let copies_done = match snapshot_result
         {
-            Ok(_) => {},
+            Ok(num_copies) => num_copies,
 
             // If there is any error, return immediately
             Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
         };
 
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
-        let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<T>());
+        // TODO: wrokload calculation doesn't take the current regions into account
+        let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions[start_copy_position..(start_copy_position+copies_done)], size_of::<T>());
+
+        // Perform the search in parallel
+
+        // Make the buffer shareable
+        let arc_copy_buffer = Arc::new(copy_buffer);
+
+        // Send the task to each thread
+        for t_idx in 0..num_threads
+        {
+            // Each vector is directly associated to a region
+            thread_pool.execute(t_idx, (mem::take(&mut thread_workload[t_idx]), arc_copy_buffer.clone(), thread_private_store_size, operations.clone(), thread_task), |args| -> Vec< Vec<usize> >
+            {
+                // Unpack args
+                let workload = args.0;
+                let arc_buffer = args.1;
+                let result_buffer_size = args.2;
+                let operations = args.3;
+                let t_task = args.4;
+
+                let mut thread_results = vec![];
+
+                // Loop over every region
+                for region_workload in workload
+                {
+                    let start = region_workload.0;
+                    let end = region_workload.1;
+
+                    // TODO - operarations should be borrowed to avoid unecessary allocations
+                    thread_results.push(t_task(&arc_buffer[start..end], start, operations.clone(), result_buffer_size));
+                }
+
+                return thread_results;
+            }).unwrap(); // It panics if we send tasks without first collecting the results
+        }
+
+        // Collect the results for that buffer (in order)
+        let all_results = thread_pool.wait_all().unwrap();
+        println!("{:#?}", all_results);
+
+        // Give the buffer back its ownership
+        copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
+
+        // Now merge everything in order
+        for (region_idx, region) in memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
+        {
+            let mut region_matches: Vec<usize> = vec![];
+
+            // Gettings the results in the same order as threads also returns ordered results
+            // This is why each result index is associated to a given region
+            for t_idx in 0..num_threads
+            {
+                region_matches.extend( &all_results[t_idx][region_idx] );
+            }
+
+            // Store the result relative to all threads and append the region
+            // One should only store results that exist
+            if region_matches.len() != 0
+            {
+                search_results.push( Matches::AddressMatches::new(region.clone(), region_matches) );
+            }
+        }
+    }
+
+    return Ok(search_results);
+}
+
+/*
+fn FilterSearchComparator<T: Send + 'static + Clone>(
+    previous_results: Vec<Matches::AddressMatches>,
+    process_handle: GenericOSInterface::GenericProcess,
+    num_threads: usize,
+    buffer_size: usize,
+    thread_private_store_size: usize,
+    thread_task: fn(&[u8], usize, Vec<(String, T)>, usize) -> Vec<usize>,
+    operations: Vec<(String, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
+{
+    let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
+
+    // Get all the pages from the previous results
+    // Store a copy of all of the regions that will search
+    let memory_regions: Vec<GenericOSInterface::GenericMemoryRegion> = previous_results.iter().map(|x| x.mem_region.clone()).collect();
+
+    // Allocate a buffer to store the copies of regions of the target, the size is controlled by the caller
+    let mut copy_buffer: Vec<u8> = vec![0; buffer_size];
+
+    // Calculate if the search is possible with such buffer
+    // A new way to calculte how much memory is necessary should take into account the min and max addresses
+    // The max value has another problem, it also needs to consider the size of the target
+    // TODO
+    let snapshot_workload_result = GenericOSInterface::GenericProcess::get_snapshot_workload(&memory_regions, copy_buffer.len());
+
+    let snapshot_workload = match snapshot_workload_result
+    {
+        Ok(work) => work,
+
+        // If there is any error, return immediately
+        Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
+    };
+
+    // Create the thread pool
+    let mut thread_pool = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
+                                                    Arc<Vec<u8>>,
+                                                    usize,
+                                                    Vec<(String, T)>,
+                                                    fn(&[u8], usize, Vec<(String, T)>, usize) -> Vec<usize>),
+                                                    Vec<Vec<usize>> >::new(num_threads);
+
+    // Loops over the the copy operations needed
+    for start_copy_position in snapshot_workload
+    {
+        // Create a snapshot of the process (copy it to the buffer)
+        let snapshot_result = process_handle.snapshot_bounded(&memory_regions[start_copy_position..], &mut copy_buffer[0..]);
+
+        // Check for errors
+        let copies_done = match snapshot_result
+        {
+            Ok(num_copies) => num_copies,
+
+            // If there is any error, return immediately
+            Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
+        };
+
+        // Create the workload partitioning for that particular buffer, you must consider the target type for the search
+        // TODO: Use filter workload partitioning
+        let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view_filter(num_threads, &previous_results[start_copy_position..(start_copy_position+copies_done)]);
 
         // Perform the search in parallel
 
@@ -130,11 +257,12 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
 
         // Now merge everything in order
-        for (region_idx, region) in memory_regions.iter().enumerate()
+        for (region_idx, region) in memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
         {
             let mut region_matches: Vec<usize> = vec![];
 
             // Gettings the results in the same order as threads also returns ordered results
+            // This is why each result index is associated to a given region
             for t_idx in 0..num_threads
             {
                 region_matches.extend( &all_results[t_idx][region_idx] );
@@ -151,7 +279,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
 
     return Ok(search_results);
 }
-
+*/
 
 
 
@@ -164,7 +292,7 @@ mod tests
     use crate::Matches::*;
 
     #[test]
-    fn TestStartSearch()
+    fn TestStartSearchRegularCase()
     {
         let process = GenericProcess::attach(1).unwrap();
 
@@ -174,7 +302,40 @@ mod tests
             None,
             process,
             8,
+            10000,
             1000,
+            LinearSearch_Comparator_u32, // It is possible to infer the type from this function
+            vec![(">".to_string(), 0)]
+        ).unwrap();
+
+        for region_match in search_result.iter()
+        {
+            println!("Search: {}", region_match.display_matches(MatchDisplayStyle::Decimal));
+        }
+
+        // This checks not only if the pages are correct, but also that the pages came in order
+        // This is important for the result filter, so min and max operations can be fast
+        let expected: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), (0..=96).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (0..=96).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (0..=96).collect())
+            ];
+        assert_eq!(search_result, expected);
+    }
+
+    #[test]
+    // It needs to reuse the buffer multiple times
+    fn TestStartSearchSmallBuffer()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+
+        let search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            process,
+            8,
+            100,
             1000,
             LinearSearch_Comparator_u32,
             vec![(">".to_string(), 0)]
@@ -193,6 +354,27 @@ mod tests
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (0..=96).collect())
             ];
         assert_eq!(search_result, expected);
+    }
+
+    #[test]
+    fn TestStartSearchFail()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+
+        let search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            process,
+            8,
+            1,
+            1000,
+            LinearSearch_Comparator_u32,
+            vec![(">".to_string(), 0)]
+        );
+
+        let expected = SearchErrors::OSInterfaceError(GenericOSErrors::SnapshotBufferIsTooSmall);
+        assert_eq!(search_result, Err(expected));
     }
 
     // Measure the time it takes for to get the min/max value
