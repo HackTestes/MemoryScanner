@@ -124,7 +124,7 @@ pub fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: &
 // It should be used for filter operations
 // This partitions each memory region's matches between all threads
 // It returns a slice of the matches that shloud be searched
-fn partition_thread_workload_equal_slice_view_filter(num_threads: usize, matches_addresses: Vec<Matches::AddressMatches>) -> Vec< Vec<(usize, usize)> >
+pub fn partition_thread_workload_equal_slice_view_filter(num_threads: usize, matches_addresses: &[Matches::AddressMatches]) -> Vec< Vec<(usize, usize)> >
 {
     // This holds the start and end of each thread task in private a queue
     // threads_workload_queues[0] -> thread 0 queue
@@ -498,9 +498,9 @@ mod tests
         let num_threads = 2;
         let memory_region = CreateFakeMemoryRegion(100);
 
-        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 15, 25] );
+        let match_obj = vec![AddressMatches::new(memory_region, vec![0, 10, 15, 25] )];
 
-        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, vec![match_obj]);
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, &match_obj);
 
         println!("Workload: {:?}", workload);
 
@@ -516,9 +516,9 @@ mod tests
         let num_threads = 6;
         let memory_region = CreateFakeMemoryRegion(100);
 
-        let match_obj = AddressMatches::new(memory_region, vec![0, 10, 15, 25] );
+        let match_obj = vec![AddressMatches::new(memory_region, vec![0, 10, 15, 25] )];
 
-        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, vec![match_obj]);
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, &match_obj);
 
         println!("Workload: {:?}", workload);
 
@@ -539,7 +539,7 @@ mod tests
                                AddressMatches::new(memory_region.clone(), vec![0, 1, 2, 3, 4, 5])
                               ];
 
-        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, matches_obj);
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, &matches_obj);
 
         println!("Workload: {:?}", workload);
 
@@ -566,7 +566,7 @@ mod tests
 
         let matches_obj = vec![AddressMatches::new(memory_region, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); 3];
 
-        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, matches_obj);
+        let workload = partition_thread_workload_equal_slice_view_filter(num_threads, &matches_obj);
 
         println!("Workload: {:?}", workload);
 

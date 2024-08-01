@@ -156,7 +156,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     return Ok(search_results);
 }
 
-/*
+
 fn FilterSearchComparator<T: Send + 'static + Clone>(
     previous_results: Vec<Matches::AddressMatches>,
     process_handle: GenericOSInterface::GenericProcess,
@@ -279,7 +279,7 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
 
     return Ok(search_results);
 }
-*/
+
 
 
 
