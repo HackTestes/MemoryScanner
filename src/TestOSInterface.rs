@@ -199,12 +199,22 @@ pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_addres
         return Err(GenericOSInterface::GenericOSErrors::PartialReadCopy);
     }
 
+    // Region identifier
+    // I will use this value to be able to create a unique memory pattern for each region, so tests can catch other types of errors
+    let mut region_value_id: usize = 0;
+
+    // Do not divide by zero
+    if absolute_vm_address != 0
+    {
+        region_value_id = absolute_vm_address/100;
+    }
+
     // It was a success, so write into the buffer to simulate a read
     for i in 0..buffer.len()
     {
         // u8 might lose some bits of the original value,
-        // but it helps to track if the region limits are beging resepected
-        buffer[i] = i as u8;
+        // but it helps to track if the region limits are being resepected
+        buffer[i] = (i + region_value_id) as u8;
     }
 
     return Ok(());

@@ -158,6 +158,7 @@ impl GenericMemoryRegion
 // -> you make a nes scan and get bad results
 // A handle would avoid this problem entirely
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct GenericProcess
 {
     handle: OSInterface::OSSpecificHandle
@@ -713,15 +714,15 @@ mod tests
 
         // Was the buffer written?
         let mut expect: Vec<u8> = (0..100).collect();
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
+        expect.append(&mut (1..101).collect());
+        expect.append(&mut (2..102).collect());
+        expect.append(&mut (3..103).collect());
+        expect.append(&mut (4..104).collect());
+        expect.append(&mut (5..105).collect());
+        expect.append(&mut (6..106).collect());
+        expect.append(&mut (7..107).collect());
+        expect.append(&mut (8..108).collect());
+        expect.append(&mut (9..109).collect());
         expect.append(&mut vec![0; 9000]);
 
         assert_eq!(buffer, expect);
@@ -748,14 +749,14 @@ mod tests
 
         // Was the buffer written?
         let mut expect: Vec<u8> = (0..100).collect();
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
-        expect.append(&mut (0..100).collect());
+        expect.append(&mut (1..101).collect());
+        expect.append(&mut (2..102).collect());
+        expect.append(&mut (3..103).collect());
+        expect.append(&mut (4..104).collect());
+        expect.append(&mut (5..105).collect());
+        expect.append(&mut (6..106).collect());
+        expect.append(&mut (7..107).collect());
+        expect.append(&mut (8..108).collect());
         assert_eq!(buffer, expect);
 
         // Reset buffer
@@ -767,7 +768,7 @@ mod tests
         // Did it succeed?
         assert!(matches!( snapshot_result, Ok(1) ));
 
-        expect = (0..100).collect();
+        expect = (9..109).collect();
         expect.append(&mut vec![0; 800]);
         assert_eq!(buffer, expect);
     }
@@ -820,12 +821,30 @@ mod tests
             }
 
             // Was the buffer written?
-            let mut expect: Vec<u8> = (0..100).collect();
-            expect.append(&mut (0..100).collect());
-            expect.append(&mut (0..100).collect());
-            expect.append(&mut (0..100).collect());
-            expect.append(&mut (0..100).collect());
-            assert_eq!(buffer, expect);
+            if start_pos == 0
+            {
+                let mut expect: Vec<u8> = (0..100).collect();
+                expect.append(&mut (1..101).collect());
+                expect.append(&mut (2..102).collect());
+                expect.append(&mut (3..103).collect());
+                expect.append(&mut (4..104).collect());
+                assert_eq!(buffer, expect);
+            }
+
+            else if start_pos == 5
+            {
+                let mut expect: Vec<u8> = (5..105).collect();
+                expect.append(&mut (6..106).collect());
+                expect.append(&mut (7..107).collect());
+                expect.append(&mut (8..108).collect());
+                expect.append(&mut (9..109).collect());
+                assert_eq!(buffer, expect);
+            }
+
+            else
+            {
+                panic!();
+            }
         }
     }
 
