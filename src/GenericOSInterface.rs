@@ -409,7 +409,7 @@ mod tests
         let process = GenericProcess::attach(1).unwrap();
 
         // &mut buffer[0..] creates a reference slice from the vec
-        let operation_result = process.read_from_vm(2, &mut buffer[0..]);
+        let operation_result = process.read_from_vm(0, &mut buffer[0..]);
 
         println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
 
@@ -418,6 +418,28 @@ mod tests
 
         // Was the buffer written?
         assert_eq!(buffer, (0..100).collect::<Vec<u8>>());
+    }
+
+    // This is a test to see if the fake process has a predictable regions based on the vm_address
+    // It should return the same pattern independently of the start address
+    #[test]
+    fn TestProcessReadSuccess_PredictableMemory()
+    {
+        // Start a zeroed buffer
+        let mut buffer: Vec<u8> = vec![0; 50];
+
+        let process = GenericProcess::attach(1).unwrap();
+
+        // &mut buffer[0..] creates a reference slice from the vec
+        let operation_result = process.read_from_vm(550, &mut buffer[0..]);
+
+        println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
+
+        // Did it succeed?
+        assert!(matches!( operation_result, Ok(()) ));
+
+        // Was the buffer written?
+        assert_eq!(buffer, (55..105).collect::<Vec<u8>>());
     }
 
     #[test]
