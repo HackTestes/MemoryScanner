@@ -792,7 +792,7 @@ mod tests
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (50..51).collect()),
             ];
 
-        let filter_result = FilterSearchComparator(
+        let mut filter_result = FilterSearchComparator(
             expected_search_result,
             process.clone(),
             3,
@@ -807,6 +807,72 @@ mod tests
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (50..51).collect()),
             ];
         assert_eq!(filter_result, expected_filter);
+
+        filter_result = FilterSearchComparator(
+            filter_result,
+            process.clone(),
+            1,
+            100,
+            1000,
+            LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
+            vec![("<".to_string(), 10)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![];
+        assert_eq!(filter_result, expected_filter);
     }
 
+    #[test]
+    fn TestFilterSearch_RegularCase_SmallBuffer()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+
+        let expected_search_result: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself (so count the matches backwords)
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), (50..51).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (50..51).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (50..51).collect()),
+            ];
+
+        let mut filter_result = FilterSearchComparator(
+            expected_search_result,
+            process.clone(),
+            3,
+            100,
+            1000,
+            LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
+            vec![("==".to_string(), 56)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself (so count the matches backwords)
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (50..51).collect()),
+            ];
+        assert_eq!(filter_result, expected_filter);
+    }
+
+    #[test]
+    fn TestFilterSearch_RegularCase_Fail_TypeTooBig()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+
+        let expected_search_result: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself (so count the matches backwords)
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), vec![99]),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), vec![99]),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), vec![99]),
+            ];
+
+        let mut filter_result = FilterSearchComparator(
+            expected_search_result,
+            process.clone(),
+            1,
+            100,
+            1000,
+            LinearSearch_ComparatorFilter_u64, // It is possible to infer the type from this function
+            vec![("==".to_string(), 56)]
+        );
+
+        assert_eq!(filter_result, Err(SearchErrors::TargetTypeTooBig));
+    }
 }
