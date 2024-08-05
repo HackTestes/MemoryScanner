@@ -206,6 +206,9 @@ fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_type
             // It extrapolates the region size
             // Alert the caller that the type size is not good, and can will lose some results
             // All u32 results are valid u8, but not all u8 are valid u32
+            // I prefer to simply refuse the search as it also simplifies the code
+            // Another consideration is that we would need to remove all offending matches in all regions,
+            // something that would have a O(s*p) complexity - s being the type size and p the amount of pages
             return Err(SearchErrors::TargetTypeTooBig);
         }
 
