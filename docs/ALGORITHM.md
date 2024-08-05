@@ -21,7 +21,7 @@ In a more practical example: you have an array with 100 positions/values and you
 ## Endianess
 
 > [!NOTE]
-> I will start by saying that you don't need to worry about this, except if you want to cross-compile this program to multiple architectures (it will 100% bite your ass if you ignore endianess in this case).
+> I will start by saying that you don't need to worry about this, except if you want to cross-compile this program to multiple architectures or to big endian (it will 100% bite your ass if you ignore endianess in this case).
 
 So, let's starating by defining what endianess is: it is the ordering used to organize bytes of a variable in memory. Besides, there are 2 general models: big endian and little endian. Big Endian stores the value in a format closer to what we are used to reading (left to right): the Most Significant Byte (MSB) in the lowest address and the Least Significant Byte (LSB) in the highest address. Little Endian is the opposite of Big Endian: MSB at the lowest address and LSB at the higest.
 

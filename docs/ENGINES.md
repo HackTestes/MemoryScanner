@@ -15,3 +15,8 @@ Let's take for example a program that shows a float as 99 to the end user, but i
 
 
 ## Unknown number engine
+
+
+## GPU usage
+
+Using the GPU to accelerate search
