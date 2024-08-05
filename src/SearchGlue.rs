@@ -158,7 +158,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
 
-        // Now merge everything in order
+        // Now merge everything in order for each of the pages copied in the buffer
         for (region_idx, region) in memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
         {
             let mut region_matches: Vec<usize> = vec![];
@@ -213,11 +213,12 @@ fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_type
         let mut mem_region_copy = region_match.mem_region.clone();
 
         // We move the base all the way to the min value, since matches only look foward
-        mem_region_copy.base_address = min;
+        // +mem_region_copy.base_address : otherwise, it clears the base address
+        mem_region_copy.base_address = mem_region_copy.base_address + min;
 
         // The max also needs to take into account the target size in bytes
         // Remember that the end is NON INCLUSIVE
-        mem_region_copy.size_bytes = max + target_type_size_bytes;
+        mem_region_copy.size_bytes = (max - min) + target_type_size_bytes;
 
         ajusted_mem_regions.push(mem_region_copy);
     }
@@ -246,6 +247,8 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
         Ok(ajusted_pages) => ajusted_pages,
         Err(error) => return Err(error),
     };
+
+    let original_memory_regions: Vec<GenericOSInterface::GenericMemoryRegion> = previous_results.iter().map(|x| x.mem_region.clone()).collect();
 
     // Make the previous results sharable
     let arc_previous_results = Arc::new(previous_results);
@@ -326,23 +329,27 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
 
                 let mut thread_results = vec![];
 
+                // DEBUG ONLY
+                //println!("Workload:\n{:?}", workload);
+
                 // Check the start search on this variable
                 let mut current_buffer_pos: usize = 0;
-
-                println!("Buffer: {:?}", &arc_buffer);
 
                 // Loop over every region
                 for (region_idx, region_workload) in workload.iter().enumerate()
                 {
                     let start = region_workload.0;
+                    let buff_start = start + current_buffer_pos;
+
                     let end = region_workload.1;
+                    let buff_end = end + current_buffer_pos;
 
-                    let dummy_match = vec![0];
+                    // DEBUG ONLY
+                    //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
 
-                    // TODO: Use filter function signature
                     thread_results.push(t_task(
-                        &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)], // Filter operations have access to the whole buffer, relative to that region
-                        start,
+                        &arc_buffer[buff_start..buff_end], // Filter operations have access to the whole buffer, relative to that region
+                        previous_matches[region_idx].matches[start], // Since we ajust the pages, we need to also ajust the match value to the new memory (otherwise we can an access out of bounds)
                         &operations,
                         result_buffer_size,
                         &previous_matches[region_idx].matches[start..end])); // We now limit which matches the thread can read for each region
@@ -351,6 +358,10 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
                     current_buffer_pos = current_buffer_pos + regions[region_idx].size_bytes;
                 }
 
+                // DEBUG ONLY
+                //println!("Thread r:\n{:?}", &thread_results);
+
+                // Remember that the results are ajusted back, becoming relative to the original regions
                 return thread_results;
             });
         }
@@ -361,8 +372,8 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
 
-        // Now merge everything in order
-        for (region_idx, region) in memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
+        // Now merge everything in order for each of the pages copied in the buffer
+        for (region_idx, region) in original_memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
         {
             let mut region_matches: Vec<usize> = vec![];
 
@@ -406,7 +417,7 @@ mod tests
             None,
             None,
             process,
-            1,
+            8,
             100,
             1000,
             LinearSearch_Comparator_u32, // It is possible to infer the type from this function
@@ -560,7 +571,7 @@ mod tests
         let memory_region = GenericOSInterface::GenericMemoryRegion::new(
             GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
             GenericOSInterface::GenericRegionState::Resident,
-            0,
+            100,
             1000);
 
         let matches_obj = vec![
@@ -572,8 +583,8 @@ mod tests
         println!("{:?}", ajusted_pages);
         
         let mut expected_region = memory_region.clone();
-        expected_region.base_address = 0;
-        expected_region.size_bytes = 501; // Non inclusive
+        expected_region.base_address = 100;
+        expected_region.size_bytes = 501;
 
         assert_eq!(vec![expected_region], ajusted_pages.unwrap());
     }
@@ -584,7 +595,7 @@ mod tests
         let memory_region = GenericOSInterface::GenericMemoryRegion::new(
             GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
             GenericOSInterface::GenericRegionState::Resident,
-            0,
+            500,
             1000);
 
         let matches_obj = vec![
@@ -596,8 +607,8 @@ mod tests
         println!("{:?}", ajusted_pages);
         
         let mut expected_region = memory_region.clone();
-        expected_region.base_address = 0;
-        expected_region.size_bytes = 1000; // Non inclusive
+        expected_region.base_address = 500;
+        expected_region.size_bytes = 1000;
 
         assert_eq!(vec![expected_region], ajusted_pages.unwrap());
     }
@@ -608,7 +619,7 @@ mod tests
         let memory_region = GenericOSInterface::GenericMemoryRegion::new(
             GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
             GenericOSInterface::GenericRegionState::Resident,
-            0,
+            10,
             1000);
 
         let matches_obj = vec![
@@ -620,8 +631,8 @@ mod tests
         println!("{:?}", ajusted_pages);
         
         let mut expected_region = memory_region.clone();
-        expected_region.base_address = 500;
-        expected_region.size_bytes = 504; // Non inclusive
+        expected_region.base_address = 510;
+        expected_region.size_bytes = 4; // Non inclusive
 
         assert_eq!(vec![expected_region], ajusted_pages.unwrap());
     }
@@ -636,28 +647,37 @@ mod tests
             1000);
 
         let matches_obj = vec![
-            AddressMatches::new(memory_region.clone(), vec![0, 500] ),
-            AddressMatches::new(memory_region.clone(), vec![0, 500] ),
-            AddressMatches::new(memory_region.clone(), vec![0, 500] ),
-            AddressMatches::new(memory_region.clone(), vec![0, 500] )
+            AddressMatches::new(memory_region.clone(), vec![5, 100] ),
+            AddressMatches::new(memory_region.clone(), vec![15, 16, 17, 467] ),
+            AddressMatches::new(memory_region.clone(), vec![155] ),
+            AddressMatches::new(memory_region.clone(), vec![500, 667, 705] )
             ];
 
         // 4 byte long target
         let ajusted_pages = ajust_pages_min_max(&matches_obj, size_of::<u8>());
         println!("{:?}", ajusted_pages);
-        
-        let mut expected_region = memory_region.clone();
-        expected_region.base_address = 0;
-        expected_region.size_bytes = 501; // Non inclusive
 
-        assert_eq!(
-            vec![
-                expected_region.clone(),
-                expected_region.clone(),
-                expected_region.clone(),
-                expected_region.clone()
-                ],
-            ajusted_pages.unwrap());
+        let mut expected_regions = vec![
+            memory_region.clone(),
+            memory_region.clone(),
+            memory_region.clone(),
+            memory_region.clone()
+            ];
+
+        // Expected region ajustment
+        expected_regions[0].base_address = 5;
+        expected_regions[0].size_bytes = 96;
+
+        expected_regions[1].base_address = 15;
+        expected_regions[1].size_bytes = 453;
+
+        expected_regions[2].base_address = 155;
+        expected_regions[2].size_bytes = 1;
+
+        expected_regions[3].base_address = 500;
+        expected_regions[3].size_bytes = 206;
+
+        assert_eq!( expected_regions, ajusted_pages.unwrap());
     }
 
     #[test]
@@ -666,7 +686,7 @@ mod tests
         let memory_region = GenericOSInterface::GenericMemoryRegion::new(
             GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
             GenericOSInterface::GenericRegionState::Resident,
-            0,
+            50,
             1000);
 
         let matches_obj = vec![
@@ -678,8 +698,8 @@ mod tests
         println!("{:?}", ajusted_pages);
         
         let mut expected_region = memory_region.clone();
-        expected_region.base_address = 100;
-        expected_region.size_bytes = 1000; // Non inclusive
+        expected_region.base_address = 150;
+        expected_region.size_bytes = 900; // Non inclusive
 
         assert_eq!(vec![expected_region], ajusted_pages.unwrap());
     }
@@ -739,16 +759,49 @@ mod tests
         let filter_result = FilterSearchComparator(
             search_result,
             process.clone(),
-            1,
+            2,
             500,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
-            vec![("==".to_string(), 0)]
+            vec![("==".to_string(), 10)]
         ).unwrap();
 
         let expected_filter: Vec<AddressMatches> = vec![
             // The matches represent the relative address in the region, not the value itself (so count the matches backwords)
-            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), (0..1).collect())
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), (5..6).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (4..5).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (1..2).collect())
+            ];
+        assert_eq!(filter_result, expected_filter);
+    }
+
+    
+    // This is to make sure that the results return the original regions
+    #[test]
+    fn TestFilterSearch_RegularCase_FilterTheFilteredResults()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+
+        let expected_search_result: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself (so count the matches backwords)
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100), (50..51).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (50..51).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (50..51).collect()),
+            ];
+
+        let filter_result = FilterSearchComparator(
+            expected_search_result,
+            process.clone(),
+            3,
+            500,
+            1000,
+            LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
+            vec![("==".to_string(), 56)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself (so count the matches backwords)
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (50..51).collect()),
             ];
         assert_eq!(filter_result, expected_filter);
     }
