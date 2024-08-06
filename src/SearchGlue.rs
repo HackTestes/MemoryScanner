@@ -3,6 +3,7 @@ use crate::ThreadPool;
 use crate::GenericOSInterface;
 use crate::SearchEngines;
 use crate::WorkloadPartitioning;
+use crate::ResultMergerHelpers;
 use std::sync::Arc;
 use std::mem::size_of;
 use std::mem;
@@ -159,6 +160,14 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
 
         // Now merge everything in order for each of the pages copied in the buffer
+        ResultMergerHelpers::MergeLinearSearchResults(
+            all_results,
+            &memory_regions[start_copy_position..(start_copy_position+copies_done)],
+            num_threads,
+            &mut search_results
+        );
+        
+        /*
         for (region_idx, region) in memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
         {
             let mut region_matches: Vec<usize> = vec![];
@@ -177,6 +186,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
                 search_results.push( Matches::AddressMatches::new(region.clone(), region_matches) );
             }
         }
+        */
     }
 
     return Ok(search_results);
@@ -310,7 +320,6 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
         for t_idx in 0..num_threads
         {
             // Each vector is directly associated to a region
-            // TODO: Share the matches
             thread_pool.execute(t_idx,
                 (mem::take(&mut thread_workload[t_idx]),
                 arc_copy_buffer.clone(),
@@ -376,24 +385,12 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
 
         // Now merge everything in order for each of the pages copied in the buffer
-        for (region_idx, region) in original_memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
-        {
-            let mut region_matches: Vec<usize> = vec![];
-
-            // Gettings the results in the same order as threads also returns ordered results
-            // This is why each result index is associated to a given region
-            for t_idx in 0..num_threads
-            {
-                region_matches.extend( &all_results[t_idx][region_idx] );
-            }
-
-            // Store the result relative to all threads and append the region
-            // One should only store results that exist
-            if region_matches.len() != 0
-            {
-                search_results.push( Matches::AddressMatches::new(region.clone(), region_matches) );
-            }
-        }
+        ResultMergerHelpers::MergeLinearSearchResults(
+            all_results,
+            &original_memory_regions[start_copy_position..(start_copy_position+copies_done)],
+            num_threads,
+            &mut search_results
+        );
     }
 
     return Ok(search_results);

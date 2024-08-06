@@ -13,6 +13,7 @@ mod Matches;
 mod TestOSInterface;
 mod WindowsOSInterface;
 mod SearchGlue;
+mod ResultMergerHelpers;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,

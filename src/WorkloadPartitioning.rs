@@ -65,6 +65,9 @@ pub fn partition_thread_workload_equal(num_threads: usize, regions: &[GenericOSI
 // That means that the function used to search cannot read out of the bounds of the private segment.
 // So insted of iterating over positions, it returns the positions of slice (a buffer with 10 bytes [0..10])
 // It return the positions of a slice
+// Why do this way? I am divinding a region between multiple threads, making the workload mostly equal between all threads,
+// however this approach might not be able to take much advantage of the data cache (each region being read is too far away).
+// Maybe an approch using interpolated/close targets could be faster
 pub fn partition_thread_workload_equal_slice_view(num_threads: usize, regions: &[GenericOSInterface::GenericMemoryRegion], target_value_size_bytes: usize) -> Vec< Vec<(usize, usize)> >
 {
     // This holds the start and end of each thread task in private a queue
