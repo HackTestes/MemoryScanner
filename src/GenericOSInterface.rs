@@ -157,8 +157,8 @@ impl GenericMemoryRegion
 // -> you reattach to PID 50 (but now it is a different process)
 // -> you make a nes scan and get bad results
 // A handle would avoid this problem entirely
+// Note: handles should not be cloned as they can get out of sync (and one the clone might close the handle while others are using it)
 #[derive(Debug)]
-#[derive(Clone)]
 pub struct GenericProcess
 {
     handle: OSInterface::OSSpecificHandle

@@ -39,7 +39,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     page_permissions_at_least: GenericOSInterface::GenericPageProtections,
     page_permissions_exact: Option<GenericOSInterface::GenericPageProtections>,
     region_state: Option<GenericOSInterface::GenericRegionState>,
-    process_handle: GenericOSInterface::GenericProcess,
+    process_handle: &GenericOSInterface::GenericProcess,
     num_threads: usize,
     buffer_size: usize,
     thread_private_store_size: usize,
@@ -220,7 +220,7 @@ fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_type
 
 fn FilterSearchComparator<T: Send + 'static + Clone>(
     previous_results: Vec<Matches::AddressMatches>,
-    process_handle: GenericOSInterface::GenericProcess,
+    process_handle: &GenericOSInterface::GenericProcess,
     num_threads: usize,
     buffer_size: usize,
     thread_private_store_size: usize,
@@ -395,7 +395,7 @@ mod tests
             PageProtection_Read|PageProtection_Write,
             None,
             None,
-            process,
+            &process,
             8,
             100,
             1000,
@@ -428,7 +428,7 @@ mod tests
             PageProtection_Read|PageProtection_Write,
             None,
             None,
-            process,
+            &process,
             8,
             500,
             1000,
@@ -462,7 +462,7 @@ mod tests
             PageProtection_Read|PageProtection_Write,
             None,
             None,
-            process,
+            &process,
             8,
             100,
             1000,
@@ -494,7 +494,7 @@ mod tests
             PageProtection_Read|PageProtection_Write,
             None,
             None,
-            process,
+            &process,
             8,
             1,
             1000,
@@ -712,7 +712,7 @@ mod tests
             PageProtection_Read|PageProtection_Write,
             None,
             None,
-            process.clone(),
+            &process,
             1,
             500,
             1000,
@@ -737,7 +737,7 @@ mod tests
 
         let filter_result = FilterSearchComparator(
             search_result,
-            process.clone(),
+            &process,
             2,
             500,
             1000,
@@ -770,7 +770,7 @@ mod tests
 
         let mut filter_result = FilterSearchComparator(
             expected_search_result,
-            process.clone(),
+            &process,
             3,
             500,
             1000,
@@ -786,7 +786,7 @@ mod tests
 
         filter_result = FilterSearchComparator(
             filter_result,
-            process.clone(),
+            &process,
             1,
             100,
             1000,
@@ -812,7 +812,7 @@ mod tests
 
         let mut filter_result = FilterSearchComparator(
             expected_search_result,
-            process.clone(),
+            &process,
             3,
             100,
             1000,
@@ -841,7 +841,7 @@ mod tests
 
         let mut filter_result = FilterSearchComparator(
             expected_search_result,
-            process.clone(),
+            &process,
             1,
             100,
             1000,

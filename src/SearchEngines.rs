@@ -15,7 +15,6 @@ fn NaiveLinearSearchPattern()
 
 }
 
-// TODO: Switch string to enum
 #[derive(Clone, Copy)]
 pub enum ComparisonOperation
 {
