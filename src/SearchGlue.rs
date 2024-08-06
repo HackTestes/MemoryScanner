@@ -43,8 +43,8 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     num_threads: usize,
     buffer_size: usize,
     thread_private_store_size: usize,
-    thread_task: fn(&[u8], usize, &[(String, T)], usize) -> Vec<usize>,
-    operations: Vec<(String, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
+    thread_task: fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize) -> Vec<usize>,
+    operations: Vec<(SearchEngines::ComparisonOperation, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
 {
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
@@ -69,8 +69,8 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     let mut thread_pool = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
                                                     Arc<Vec<u8>>,
                                                     usize,
-                                                    Vec<(String, T)>,
-                                                    fn(&[u8], usize, &[(String, T)], usize) -> Vec<usize>,
+                                                    Vec<(SearchEngines::ComparisonOperation, T)>,
+                                                    fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize) -> Vec<usize>,
                                                     Vec<GenericOSInterface::GenericMemoryRegion>),
                                                     Vec<Vec<usize>> >::new(num_threads);
 
@@ -166,27 +166,6 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
             num_threads,
             &mut search_results
         );
-        
-        /*
-        for (region_idx, region) in memory_regions[start_copy_position..(start_copy_position+copies_done)].iter().enumerate()
-        {
-            let mut region_matches: Vec<usize> = vec![];
-
-            // Gettings the results in the same order as threads also returns ordered results
-            // This is why each result index is associated to a given region
-            for t_idx in 0..num_threads
-            {
-                region_matches.extend( &all_results[t_idx][region_idx] );
-            }
-
-            // Store the result relative to all threads and append the region
-            // One should only store results that exist
-            if region_matches.len() != 0
-            {
-                search_results.push( Matches::AddressMatches::new(region.clone(), region_matches) );
-            }
-        }
-        */
     }
 
     return Ok(search_results);
@@ -245,8 +224,8 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
     num_threads: usize,
     buffer_size: usize,
     thread_private_store_size: usize,
-    thread_task: fn(&[u8], usize, &[(String, T)], usize, &[usize]) -> Vec<usize>,
-    operations: Vec<(String, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
+    thread_task: fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize, &[usize]) -> Vec<usize>,
+    operations: Vec<(SearchEngines::ComparisonOperation, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
 {
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
@@ -287,8 +266,8 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
     let mut thread_pool = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
                                                     Arc<Vec<u8>>,
                                                     usize,
-                                                    Vec<(String, T)>,
-                                                    fn(&[u8], usize, &[(String, T)], usize, &[usize]) -> Vec<usize>,
+                                                    Vec<(SearchEngines::ComparisonOperation, T)>,
+                                                    fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize, &[usize]) -> Vec<usize>,
                                                     Vec<GenericOSInterface::GenericMemoryRegion>,
                                                     Arc<Vec<Matches::AddressMatches>>),
                                                     Vec<Vec<usize>> >::new(num_threads);
@@ -421,7 +400,7 @@ mod tests
             100,
             1000,
             LinearSearch_Comparator_u32, // It is possible to infer the type from this function
-            vec![(">".to_string(), 0)]
+            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -454,7 +433,7 @@ mod tests
             500,
             1000,
             LinearSearch_Comparator_u8, // It is possible to infer the type from this function
-            vec![(">=".to_string(), 99)]
+            vec![(SearchEngines::ComparisonOperation::HigherOrEqual, 99)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -488,7 +467,7 @@ mod tests
             100,
             1000,
             LinearSearch_Comparator_u32,
-            vec![(">".to_string(), 0)]
+            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -520,7 +499,7 @@ mod tests
             1,
             1000,
             LinearSearch_Comparator_u32,
-            vec![(">".to_string(), 0)]
+            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
         );
 
         let expected = SearchErrors::OSInterfaceError(GenericOSErrors::SnapshotBufferIsTooSmall);
@@ -738,7 +717,7 @@ mod tests
             500,
             1000,
             LinearSearch_Comparator_u8, // It is possible to infer the type from this function
-            vec![(">".to_string(), 0)]
+            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -763,7 +742,7 @@ mod tests
             500,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
-            vec![("==".to_string(), 10)]
+            vec![(SearchEngines::ComparisonOperation::Equal, 10)]
         ).unwrap();
 
         let expected_filter: Vec<AddressMatches> = vec![
@@ -796,7 +775,7 @@ mod tests
             500,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
-            vec![("==".to_string(), 56)]
+            vec![(SearchEngines::ComparisonOperation::Equal, 56)]
         ).unwrap();
 
         let expected_filter: Vec<AddressMatches> = vec![
@@ -812,7 +791,7 @@ mod tests
             100,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
-            vec![("<".to_string(), 10)]
+            vec![(SearchEngines::ComparisonOperation::Lower, 10)]
         ).unwrap();
 
         let expected_filter: Vec<AddressMatches> = vec![];
@@ -838,7 +817,7 @@ mod tests
             100,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
-            vec![("==".to_string(), 56)]
+            vec![(SearchEngines::ComparisonOperation::Equal, 56)]
         ).unwrap();
 
         let expected_filter: Vec<AddressMatches> = vec![
@@ -867,7 +846,7 @@ mod tests
             100,
             1000,
             LinearSearch_ComparatorFilter_u64, // It is possible to infer the type from this function
-            vec![("==".to_string(), 56)]
+            vec![(SearchEngines::ComparisonOperation::Equal, 56)]
         );
 
         assert_eq!(filter_result, Err(SearchErrors::TargetTypeTooBig));

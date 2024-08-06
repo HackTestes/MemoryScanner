@@ -16,7 +16,8 @@ fn NaiveLinearSearchPattern()
 }
 
 // TODO: Switch string to enum
-enum ComparisonOperation
+#[derive(Clone, Copy)]
+pub enum ComparisonOperation
 {
     Unequal, // !=
     Equal, // ==
@@ -31,15 +32,15 @@ macro_rules! SelectCompareValues
 {
     ($value_to_check: expr, $target_value: expr, $comparison_op: expr) =>
     {
-        match $comparison_op.as_str()
+        match $comparison_op
         {
-            "!=" => $value_to_check != $target_value,
-            "==" => $value_to_check == $target_value,
-            ">" => $value_to_check > $target_value,
-            "<" => $value_to_check < $target_value,
-            ">=" => $value_to_check >= $target_value,
-            "<=" => $value_to_check <= $target_value,
-            _ => panic!("No comparison operation!")
+            ComparisonOperation::Unequal => $value_to_check != $target_value,
+            ComparisonOperation::Equal => $value_to_check == $target_value,
+            ComparisonOperation::Higher => $value_to_check > $target_value,
+            ComparisonOperation::Lower => $value_to_check < $target_value,
+            ComparisonOperation::HigherOrEqual => $value_to_check >= $target_value,
+            ComparisonOperation::LowerOrEqual => $value_to_check <= $target_value
+            //_ => panic!("No comparison operation!")
         };
     }
 }
@@ -55,7 +56,7 @@ macro_rules! Comparator
         // The mem_region_slice holds a partial view of a bigger buffer and of the private segment (thread workload), it represents the slice of memory belonging to a specific region
         // It also prevents the function from reading from another region or private segment in the buffer
         // The slice start is necessary to ajust the results, so it returns an address relative to the memory region
-        pub fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: &[(String, $target_type)], match_buffer_size: usize) -> Vec<usize>
+        pub fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: &[(ComparisonOperation, $target_type)], match_buffer_size: usize) -> Vec<usize>
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
@@ -83,7 +84,7 @@ macro_rules! Comparator
                 for op_idx in 0..operations.len()
                 {
                     // Unpack the operation
-                    let comparison_op: &String = &operations[op_idx].0;
+                    let comparison_op: ComparisonOperation = operations[op_idx].0;
                     let target_value: $target_type = operations[op_idx].1;
                 
                     let result = SelectCompareValues!(value_to_check, target_value, comparison_op);
@@ -141,7 +142,7 @@ macro_rules! ComparatorFilter
         // The mem_region_slice holds a partial view of a bigger buffer and of the private segment (thread workload), it represents the slice of memory belonging to a specific region
         // It also prevents the function from reading from another region or private segment in the buffer
         // The slice start is necessary to ajust the results, so it returns an address relative to the memory region
-        pub fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: &[(String, $target_type)], match_buffer_size: usize, previous_matches: &[usize]) -> Vec<usize>
+        pub fn $func_name(mem_region_slice_view: &[u8], slice_view_start: usize, operations: &[(ComparisonOperation, $target_type)], match_buffer_size: usize, previous_matches: &[usize]) -> Vec<usize>
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
@@ -168,7 +169,7 @@ macro_rules! ComparatorFilter
                 for op_idx in 0..operations.len()
                 {
                     // Unpack the operation
-                    let comparison_op: &String = &operations[op_idx].0;
+                    let comparison_op: ComparisonOperation = operations[op_idx].0;
                     let target_value: $target_type = operations[op_idx].1;
                 
                     let result = SelectCompareValues!(value_to_check, target_value, comparison_op);
@@ -246,7 +247,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, f32)> = vec![(">".to_string(), 10.0 as f32), ("<".to_string(), 20.0 as f32)];
+        let operations: Vec<(ComparisonOperation, f32)> = vec![(ComparisonOperation::Higher, 10.0 as f32), (ComparisonOperation::Lower, 20.0 as f32)];
 
         // Even if you use arc, you can still slice it
         let arc_buffer = Arc::new(buffer);
@@ -280,7 +281,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 15)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -311,7 +312,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("!=".to_string(), 0)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Unequal, 0)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -342,7 +343,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![(">".to_string(), 14)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Higher, 14)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -381,7 +382,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![(">=".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::HigherOrEqual, 15)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -412,7 +413,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("<".to_string(), 10)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Lower, 10)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -451,7 +452,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("<=".to_string(), 9)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::LowerOrEqual, 9)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -482,7 +483,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![(">".to_string(), 10), ("<".to_string(), 20)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Higher, 10), (ComparisonOperation::Lower, 20)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -509,7 +510,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u16)> = vec![("==".to_string(), 257)];
+        let operations: Vec<(ComparisonOperation, u16)> = vec![(ComparisonOperation::Equal, 257)];
 
         let result = LinearSearch_Comparator_u16(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -540,7 +541,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u32)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u32)> = vec![(ComparisonOperation::Equal, 15)];
 
         let result = LinearSearch_Comparator_u32(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -567,7 +568,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 15)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -596,7 +597,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u32)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u32)> = vec![(ComparisonOperation::Equal, 15)];
 
         let result = LinearSearch_Comparator_u32(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -624,7 +625,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 25;
-        let operations: Vec<(String, u32)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u32)> = vec![(ComparisonOperation::Equal, 15)];
 
         // Onlt share part of the buffer and see if it corrects the output
         let result = LinearSearch_Comparator_u32(&buffer[start..buffer_size], start, &operations, 1000);
@@ -653,7 +654,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 15)];
 
         // Assume the it had a match at 25 previously
         // Assume that the needle moved
@@ -686,7 +687,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 15)];
 
         // Assume the it had a match at 25, 30 and 45 previously
         // Assume that the needle is actually 25 and the buffer changed to represent this
@@ -720,7 +721,7 @@ mod tests
 
         // The thread only gets half of the buffer
         let start: usize = 25;
-        let operations: Vec<(String, u8)> = vec![("==".to_string(), 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 15)];
 
         // Assume the it had a match at 25, 30 and 45 previously
         // Assume that the needle is actually 25 and the buffer changed to represent this
