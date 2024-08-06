@@ -102,6 +102,7 @@ So, due to increased complexity, this mode will not be supported.
         * Current situation: I made some bad decisions on the algorithm (making it hard and unreadable tbh), but I have since refined it
         * How: update the docs first and then updatae the code
 
+    * [ ] Make the parallel search code a routine, to improve on testing and improve readability of the Glue code
 * Performance optimization
 
     * [ ] Use threads pools in the search
