@@ -4,6 +4,7 @@ use crate::GenericOSInterface;
 use crate::SearchEngines;
 use crate::WorkloadPartitioning;
 use crate::ResultMergerHelpers;
+use crate::SearchRoutines;
 use std::sync::Arc;
 use std::mem::size_of;
 use std::mem;
@@ -34,7 +35,7 @@ enum TargetType
     u128
 }
 
-
+// T: Target type
 fn StartSearchComparator<T: Send + 'static + Clone>(
     page_permissions_at_least: GenericOSInterface::GenericPageProtections,
     page_permissions_exact: Option<GenericOSInterface::GenericPageProtections>,
@@ -46,6 +47,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     thread_task: fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize) -> Vec<usize>,
     operations: Vec<(SearchEngines::ComparisonOperation, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
 {
+    // Allocating space for the results
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
     // Get all pages
@@ -92,69 +94,19 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
         let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions[start_copy_position..(start_copy_position+copies_done)], size_of::<T>());
 
-        // Perform the search in parallel
-
         // Make the buffer shareable
         let arc_copy_buffer = Arc::new(copy_buffer);
 
-        // Send the task to each thread
-        for t_idx in 0..num_threads
-        {
-            // Each vector is directly associated to a region
-            thread_pool.execute(t_idx,
-                (mem::take(&mut thread_workload[t_idx]),
-                arc_copy_buffer.clone(),
-                thread_private_store_size,
-                operations.clone(),
-                thread_task,
-                memory_regions.clone()),
-                |args| -> Vec< Vec<usize> >
-            {
-                // Unpack args
-                let workload = args.0;
-                let arc_buffer = args.1;
-                let result_buffer_size = args.2;
-                let operations = args.3;
-                let t_task = args.4;
-                let regions = args.5;
-
-                let mut thread_results = vec![];
-
-                // This value is used so we can get the correct region from the buffer
-                // Aka I am getting the region's position in the buffer
-                // We start at zero and then increase based on the size
-                let mut current_buffer_pos: usize = 0;
-
-                // Loop over every region
-                for (region_idx, region_workload) in workload.iter().enumerate()
-                {
-                    let start = region_workload.0;
-                    let buff_start = start + current_buffer_pos;
-
-                    let end = region_workload.1;
-                    let buff_end = end + current_buffer_pos;
-
-                    // Use it only for debugging searched regions
-                    //println!("Region relative:({}, {})", start, end);
-                    //println!("Buffer: ({}, {})", buff_start, buff_end);
-                    //println!("{:?}", arc_buffer);
-
-                    thread_results.push(t_task(
-                        &arc_buffer[buff_start..buff_end], // The thread can only read its private segment
-                        start, // It is ajust the results to be relative to the buffer
-                        &operations,
-                        result_buffer_size));
-
-                    // Use the buffer size as an offset
-                    current_buffer_pos = current_buffer_pos + regions[region_idx].size_bytes;
-                }
-
-                return thread_results;
-            }).unwrap(); // It panics if we send tasks without first collecting the results
-        }
-
-        // Collect the results for that buffer (in order)
-        let all_results = thread_pool.wait_all().unwrap();
+        // Perform the search in parallel
+        let all_results = SearchRoutines::StartParallelSearchLinearComparator::<T>(
+            &arc_copy_buffer,
+            &mut thread_workload,
+            &operations,
+            &memory_regions,
+            thread_private_store_size,
+            &mut thread_pool,
+            thread_task
+        );
 
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
@@ -295,70 +247,17 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
         // Make the buffer shareable
         let arc_copy_buffer = Arc::new(copy_buffer);
 
-        // Send the task to each thread
-        for t_idx in 0..num_threads
-        {
-            // Each vector is directly associated to a region
-            thread_pool.execute(t_idx,
-                (mem::take(&mut thread_workload[t_idx]),
-                arc_copy_buffer.clone(),
-                thread_private_store_size,
-                operations.clone(),
-                thread_task,
-                memory_regions.clone(),
-                arc_previous_results.clone()),
-                |args| -> Vec< Vec<usize> >
-            {
-                // Unpack args
-                let workload = args.0;
-                let arc_buffer = args.1;
-                let result_buffer_size = args.2;
-                let operations = args.3;
-                let t_task = args.4;
-                let regions = args.5;
-                let previous_matches = args.6;
-
-                let mut thread_results = vec![];
-
-                // DEBUG ONLY
-                //println!("Workload:\n{:?}", workload);
-
-                // Check the start search on this variable
-                let mut current_buffer_pos: usize = 0;
-
-                // Loop over every region
-                for (region_idx, region_workload) in workload.iter().enumerate()
-                {
-                    let start = region_workload.0;
-                    let buff_start = start + current_buffer_pos;
-
-                    let end = region_workload.1;
-                    let buff_end = end + current_buffer_pos;
-
-                    // DEBUG ONLY
-                    //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
-
-                    thread_results.push(t_task(
-                        &arc_buffer[buff_start..buff_end], // Filter operations have access to the whole buffer, relative to that region
-                        previous_matches[region_idx].matches[start], // Since we ajust the pages, we need to also ajust the match value to the new memory (otherwise we can an access out of bounds)
-                        &operations,
-                        result_buffer_size,
-                        &previous_matches[region_idx].matches[start..end])); // We now limit which matches the thread can read for each region
-
-                    // Use the buffer size as an offset
-                    current_buffer_pos = current_buffer_pos + regions[region_idx].size_bytes;
-                }
-
-                // DEBUG ONLY
-                //println!("Thread r:\n{:?}", &thread_results);
-
-                // Remember that the results are ajusted back, becoming relative to the original regions
-                return thread_results;
-            });
-        }
-
-        // Collect the results for that buffer (in order)
-        let all_results = thread_pool.wait_all().unwrap();
+        // Perform the search filtering in parallel
+        let all_results = SearchRoutines::FilterParallelSearchLinearComparator::<T>(
+            &arc_previous_results,
+            &arc_copy_buffer,
+            &mut thread_workload,
+            &operations,
+            &memory_regions,
+            thread_private_store_size,
+            &mut thread_pool,
+            thread_task
+        );
 
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
