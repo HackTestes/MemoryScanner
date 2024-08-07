@@ -272,6 +272,11 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
 
         return Ok(results);
     }
+
+    pub fn get_num_threads(&self) -> usize
+    {
+        return self.thread_list.len();
+    }
 }
 
 impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
@@ -597,5 +602,18 @@ mod tests
             let all_results = thread_pool.wait_all();
             println!("Results: {:?}", all_results);
         }
+    }
+
+    #[test]
+    fn ThreadPoolGetNumberOfThreads()
+    {
+        let mut thread_pool = ThreadPool::<i32, i32>::new(2);
+        assert_eq!(2, thread_pool.get_num_threads());
+    
+        thread_pool = ThreadPool::<i32, i32>::new(1);
+        assert_eq!(1, thread_pool.get_num_threads());
+
+        thread_pool = ThreadPool::<i32, i32>::new(8);
+        assert_eq!(8, thread_pool.get_num_threads());
     }
 }
