@@ -20,10 +20,10 @@ pub enum ComparisonOperation
 {
     Unequal, // !=
     Equal, // ==
-    Higher, // >
-    HigherOrEqual, // >=
-    Lower, // <
-    LowerOrEqual // <=
+    Greater, // >
+    GreaterOrEqual, // >=
+    Less, // <
+    LessOrEqual // <=
 }
 
 // This function is shared between the comparator and its filter
@@ -35,10 +35,10 @@ macro_rules! SelectCompareValues
         {
             ComparisonOperation::Unequal => $value_to_check != $target_value,
             ComparisonOperation::Equal => $value_to_check == $target_value,
-            ComparisonOperation::Higher => $value_to_check > $target_value,
-            ComparisonOperation::Lower => $value_to_check < $target_value,
-            ComparisonOperation::HigherOrEqual => $value_to_check >= $target_value,
-            ComparisonOperation::LowerOrEqual => $value_to_check <= $target_value
+            ComparisonOperation::Greater => $value_to_check > $target_value,
+            ComparisonOperation::Less => $value_to_check < $target_value,
+            ComparisonOperation::GreaterOrEqual => $value_to_check >= $target_value,
+            ComparisonOperation::LessOrEqual => $value_to_check <= $target_value
             //_ => panic!("No comparison operation!")
         };
     }
@@ -246,7 +246,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(ComparisonOperation, f32)> = vec![(ComparisonOperation::Higher, 10.0 as f32), (ComparisonOperation::Lower, 20.0 as f32)];
+        let operations: Vec<(ComparisonOperation, f32)> = vec![(ComparisonOperation::Greater, 10.0 as f32), (ComparisonOperation::Less, 20.0 as f32)];
 
         // Even if you use arc, you can still slice it
         let arc_buffer = Arc::new(buffer);
@@ -323,7 +323,7 @@ mod tests
     }
 
     #[test]
-    fn TestSearchEngines_ComparatorHigherThan()
+    fn TestSearchEngines_ComparatorGreaterThan()
     {
         let buffer_size = 50;
         let mut buffer: Vec<u8> = vec![0; buffer_size];
@@ -342,7 +342,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Higher, 14)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Greater, 14)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -354,7 +354,7 @@ mod tests
     }
 
     #[test]
-    fn TestSearchEngines_ComparatorHigherThanOrEqual()
+    fn TestSearchEngines_ComparatorGreaterThanOrEqual()
     {
         let buffer_size = 50;
         let mut buffer: Vec<u8> = vec![0; buffer_size];
@@ -381,7 +381,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::HigherOrEqual, 15)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::GreaterOrEqual, 15)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -393,7 +393,7 @@ mod tests
     }
 
     #[test]
-    fn TestSearchEngines_ComparatorLowerThan()
+    fn TestSearchEngines_ComparatorLessThan()
     {
         let buffer_size = 50;
         let mut buffer: Vec<u8> = vec![10; buffer_size];
@@ -412,7 +412,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Lower, 10)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Less, 10)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -424,7 +424,7 @@ mod tests
     }
 
     #[test]
-    fn TestSearchEngines_ComparatorLowerThanOrEqual()
+    fn TestSearchEngines_ComparatorLessThanOrEqual()
     {
         let buffer_size = 50;
         let mut buffer: Vec<u8> = vec![10; buffer_size];
@@ -451,7 +451,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::LowerOrEqual, 9)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::LessOrEqual, 9)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 
@@ -482,7 +482,7 @@ mod tests
         println!("Buffer: {:?}", buffer);
 
         let start: usize = 0;
-        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Higher, 10), (ComparisonOperation::Lower, 20)];
+        let operations: Vec<(ComparisonOperation, u8)> = vec![(ComparisonOperation::Greater, 10), (ComparisonOperation::Less, 20)];
 
         let result = LinearSearch_Comparator_u8(&buffer[0..buffer_size], start, &operations, 1000);
 

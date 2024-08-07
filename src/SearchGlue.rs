@@ -400,7 +400,7 @@ mod tests
             100,
             1000,
             LinearSearch_Comparator_u32, // It is possible to infer the type from this function
-            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
+            vec![(SearchEngines::ComparisonOperation::Greater, 0)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -433,7 +433,7 @@ mod tests
             500,
             1000,
             LinearSearch_Comparator_u8, // It is possible to infer the type from this function
-            vec![(SearchEngines::ComparisonOperation::HigherOrEqual, 99)]
+            vec![(SearchEngines::ComparisonOperation::GreaterOrEqual, 99)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -467,7 +467,7 @@ mod tests
             100,
             1000,
             LinearSearch_Comparator_u32,
-            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
+            vec![(SearchEngines::ComparisonOperation::Greater, 0)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -499,7 +499,7 @@ mod tests
             1,
             1000,
             LinearSearch_Comparator_u32,
-            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
+            vec![(SearchEngines::ComparisonOperation::Greater, 0)]
         );
 
         let expected = SearchErrors::OSInterfaceError(GenericOSErrors::SnapshotBufferIsTooSmall);
@@ -717,7 +717,7 @@ mod tests
             500,
             1000,
             LinearSearch_Comparator_u8, // It is possible to infer the type from this function
-            vec![(SearchEngines::ComparisonOperation::Higher, 0)]
+            vec![(SearchEngines::ComparisonOperation::Greater, 0)]
         ).unwrap();
 
         for region_match in search_result.iter()
@@ -791,7 +791,7 @@ mod tests
             100,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
-            vec![(SearchEngines::ComparisonOperation::Lower, 10)]
+            vec![(SearchEngines::ComparisonOperation::Less, 10)]
         ).unwrap();
 
         let expected_filter: Vec<AddressMatches> = vec![];
