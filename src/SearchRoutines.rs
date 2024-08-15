@@ -178,3 +178,178 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
         // Give the results to be later collected in order
         return thread_pool.wait_all().unwrap();
 }
+
+#[cfg(test)]
+mod tests
+{
+    use crate::SearchRoutines::*;
+    use crate::GenericOSInterface::*;
+    use crate::WorkloadPartitioning::*;
+    use crate::ThreadPool;
+    use crate::SearchEngines::*;
+    use std::mem::size_of;
+    use std::sync::Arc;
+    use std::time;
+
+    // Use this test to benchmark search engines
+    #[ignore]
+    #[test]
+    fn TestStartPrallelSearchRoutineBench()
+    {
+        let num_threads: usize = 12;
+        let buffer_size: usize = 1*1024*1024*1024;
+        let thread_private_store_size: usize = 100000000;
+
+        // Create what would be the representation of the memory in the process
+        let mut buffer = vec![0; buffer_size];
+        buffer[buffer_size-1] = 1;
+        let arc_buffer: Arc<Vec<u8>> = Arc::new(buffer);
+
+        // Create the memory regions, which need to correspond to the copy buffer
+        let memory_regions = vec![GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 0, buffer_size)];
+
+        // Calculate the workload for each thread
+        let mut thread_workload = partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u32>());
+
+        let mut thread_pool = ThreadPool::ThreadPool::<
+            (
+                Vec<(usize, usize)>,
+                Arc<Vec<u8>>,
+                usize,
+                Vec<(SearchEngines::ComparisonOperation, u32)>,
+                fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u32)], usize) -> Vec<usize>,
+                Vec<GenericOSInterface::GenericMemoryRegion>
+            ),
+            Vec<Vec<usize>> >::new(num_threads);
+
+        let operations: Vec<(SearchEngines::ComparisonOperation, u32)> = vec![(ComparisonOperation::Unequal, 1)];
+
+        let timer = time::Instant::now();
+        let all_results = StartParallelSearchLinearComparator::<u32>(
+            &arc_buffer,
+            &mut thread_workload,
+            &operations,
+            &memory_regions,
+            thread_private_store_size,
+            &mut thread_pool,
+            LinearSearch_Comparator_u32
+        );
+        let elapsed = timer.elapsed();
+
+        println!("Search took: \n{}s\n{}ms\n{}us", elapsed.as_secs(), elapsed.as_millis(), elapsed.as_micros());
+        println!("Throughput: \n{} bytes/ms \n{} GiB/s", buffer_size as u128/elapsed.as_millis(), (buffer_size/(1024*1024*1024)) as f64 /elapsed.as_secs() as f64);
+        //println!("Results from search: \n{:?}", all_results);
+
+        let expected: Vec<Vec<Vec<usize>>> = vec![ vec![ vec![] ] ];
+        //assert_eq!(expected, all_results);
+        assert!(false);
+    }
+
+
+    #[test]
+    fn TestStartPrallelSearchRoutine_RegularCase()
+    {
+        let num_threads: usize = 4;
+        let buffer_size: usize = 1000;
+        let thread_private_store_size: usize = 1000;
+
+        // Create what would be the representation of the memory in the process
+        let mut buffer = vec![0; buffer_size];
+        buffer[500] = 1;
+        let arc_buffer: Arc<Vec<u8>> = Arc::new(buffer);
+
+        // Create the memory regions, which need to correspond to the copy buffer
+        let memory_regions = vec![GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 0, buffer_size)];
+
+        // Calculate the workload for each thread
+        let mut thread_workload = partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u8>());
+
+        println!("Workload: {:?}", thread_workload);
+
+        let mut thread_pool = ThreadPool::ThreadPool::<
+            (
+                Vec<(usize, usize)>,
+                Arc<Vec<u8>>,
+                usize,
+                Vec<(SearchEngines::ComparisonOperation, u8)>,
+                fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u8)], usize) -> Vec<usize>,
+                Vec<GenericOSInterface::GenericMemoryRegion>
+            ),
+            Vec<Vec<usize>> >::new(num_threads);
+
+        let operations: Vec<(SearchEngines::ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 1)];
+
+        let timer = time::Instant::now();
+        let all_results = StartParallelSearchLinearComparator(
+            &arc_buffer,
+            &mut thread_workload,
+            &operations,
+            &memory_regions,
+            thread_private_store_size,
+            &mut thread_pool,
+            LinearSearch_Comparator_u8
+        );
+        let elapsed = timer.elapsed();
+
+        println!("Search took: \n{}s\n{}ms\n{}us", elapsed.as_secs(), elapsed.as_millis(), elapsed.as_micros());
+        println!("Throughput: \n{} bytes/ms \n{} GiB/s", buffer_size as f64/elapsed.as_millis() as f64, (buffer_size/(1024*1024*1024)) as f64 /elapsed.as_secs() as f64);
+        println!("Results from search: \n{:?}", all_results);
+
+        let expected: Vec<Vec<Vec<usize>>> = vec![ vec![vec![]], vec![vec![]], vec![vec![500]], vec![vec![]] ];
+        assert_eq!(expected, all_results);
+    }
+
+
+    #[test]
+    fn TestStartPrallelSearchRoutine_ValueInTheMiddleOfSegment()
+    {
+        let num_threads: usize = 4;
+        let buffer_size: usize = 1000;
+        let thread_private_store_size: usize = 1000;
+
+        // Create what would be the representation of the memory in the process
+        let mut buffer = vec![0; buffer_size];
+        buffer[499] = 1;
+        let arc_buffer: Arc<Vec<u8>> = Arc::new(buffer);
+
+        // Create the memory regions, which need to correspond to the copy buffer
+        let memory_regions = vec![GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 0, buffer_size)];
+
+        // Calculate the workload for each thread
+        let mut thread_workload = partition_thread_workload_equal_slice_view(num_threads, &memory_regions, size_of::<u16>());
+
+        println!("Workload: {:?}", thread_workload);
+
+        let mut thread_pool = ThreadPool::ThreadPool::<
+            (
+                Vec<(usize, usize)>,
+                Arc<Vec<u8>>,
+                usize,
+                Vec<(SearchEngines::ComparisonOperation, u16)>,
+                fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u16)], usize) -> Vec<usize>,
+                Vec<GenericOSInterface::GenericMemoryRegion>
+            ),
+            Vec<Vec<usize>> >::new(num_threads);
+
+        let operations: Vec<(SearchEngines::ComparisonOperation, u16)> = vec![(ComparisonOperation::Equal, 1)];
+
+        let timer = time::Instant::now();
+        let all_results = StartParallelSearchLinearComparator(
+            &arc_buffer,
+            &mut thread_workload,
+            &operations,
+            &memory_regions,
+            thread_private_store_size,
+            &mut thread_pool,
+            LinearSearch_Comparator_u16
+        );
+        let elapsed = timer.elapsed();
+
+        println!("Search took: \n{}s\n{}ms\n{}us", elapsed.as_secs(), elapsed.as_millis(), elapsed.as_micros());
+        println!("Throughput: \n{} bytes/ms \n{} GiB/s", buffer_size as f64/elapsed.as_millis() as f64, (buffer_size/(1024*1024*1024)) as f64 /elapsed.as_secs() as f64);
+        println!("Results from search: \n{:?}", all_results);
+
+        let expected: Vec<Vec<Vec<usize>>> = vec![ vec![vec![]], vec![vec![499]], vec![vec![]], vec![vec![]] ];
+        assert_eq!(expected, all_results);
+    }
+}

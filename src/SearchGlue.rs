@@ -68,6 +68,7 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
     };
 
     // Create the thread pool
+    // It must be created here so the search operation can reuse it throughout the entire search
     let mut thread_pool = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
                                                     Arc<Vec<u8>>,
                                                     usize,
