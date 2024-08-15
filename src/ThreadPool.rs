@@ -23,6 +23,13 @@ use std::sync::mpsc;
 use std::thread;
 use std::mem;
 
+#[derive(Debug)]
+#[derive(PartialEq)]
+pub enum TPErrors
+{
+    InvalidNumberOfThreads,
+    ThreadAlreadyHasATask
+}
 
 // ThreadPool
 // Actions
@@ -180,9 +187,16 @@ pub struct ThreadPool<ARGS, RETURN_STRUCT>
 // Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
 impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
 {
-    // TODO: alert the user that values <=0 should make this function fail
-    pub fn new(num_threads: usize) -> ThreadPool<ARGS, RETURN_STRUCT>
+    pub fn new(num_threads: usize) -> Result<ThreadPool<ARGS, RETURN_STRUCT>, TPErrors>
     {
+        // Function fails with an invalid number of threads
+        // In other words, you must create a pool with at least 1 thread
+        // TODO: alert the user that values <=0 should make this function fail - would a Result be better?
+        if num_threads < 1
+        {
+            return Err(TPErrors::InvalidNumberOfThreads);
+        }
+
         // Thread list - holds the handles to each thread
         let mut new_thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> > = Vec::new();
 
@@ -224,10 +238,10 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
             new_thread_list.push(thread);
         }
 
-        return ThreadPool
+        return Ok(ThreadPool
         {
             thread_list: new_thread_list,
-        };
+        });
     }
 
 
@@ -318,7 +332,7 @@ mod tests
         let num_threads: usize = 5;
 
         // Setup the thread pool with the function input, output and number of threads
-        let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads);
+        let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads).unwrap();
 
         // You can create an actual function that will be executed by the threads
         // Note that the RETURN value must match the one at the creation of the pool
@@ -353,7 +367,7 @@ mod tests
         let num_threads: usize = 5;
 
         // Setup the thread pool with the function input, output and number of threads
-        let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads);
+        let mut thread_pool = ThreadPool::<(i32, i32), i32>::new(num_threads).unwrap();
 
         // Say you have a function that you can't change to conform for the new API, you can use a non-moving closure
         fn task(arg1: i32, arg2: i32) -> i32
@@ -388,7 +402,7 @@ mod tests
         let num_threads: usize = 10;
 
         // Setup the thread pool with the function input, output and number of threads
-        let mut thread_pool = ThreadPool::<i32, i32>::new(num_threads);
+        let mut thread_pool = ThreadPool::<i32, i32>::new(num_threads).unwrap();
 
         // Say you have a function that you can't change to conform for the new API, you can use a non-moving closure
         fn task(arg1: i32) -> i32
@@ -425,7 +439,7 @@ mod tests
     {
         use::std::time;
         {
-            let mut thread_pool = ThreadPool::<Vec<u8>, i32>::new(1);
+            let mut thread_pool = ThreadPool::<Vec<u8>, i32>::new(1).unwrap();
 
             fn task(arg: Vec<u8>) -> i32
             { 
@@ -453,7 +467,7 @@ mod tests
     {
         use::std::time;
         {
-            let mut thread_pool = ThreadPool::<i32, Vec<u8>>::new(1);
+            let mut thread_pool = ThreadPool::<i32, Vec<u8>>::new(1).unwrap();
 
             fn task(arg: i32) -> Vec<u8>
             { 
@@ -487,7 +501,7 @@ mod tests
 
             loop
             {
-                let mut thread_pool = ThreadPool::<i32, i32>::new(1);
+                let mut thread_pool = ThreadPool::<i32, i32>::new(1).unwrap();
                 let _ = thread_pool.execute(0 as usize, 1, task);
                 let all_results = thread_pool.wait_all();
             }
@@ -516,7 +530,7 @@ mod tests
             }
 
             // The thread pool is create before we measure time, so we ignore the pool creation cost (can we reuse threads efficiently?)
-            let mut thread_pool = ThreadPool::<(i32, i32, i32, i32), i32>::new(1);
+            let mut thread_pool = ThreadPool::<(i32, i32, i32, i32), i32>::new(1).unwrap();
 
             // Thread pool cost measurement
             let mut now = time::Instant::now();
@@ -592,7 +606,7 @@ mod tests
             return arg;
         }
 
-        let mut thread_pool = ThreadPool::<i32, i32>::new(2);
+        let mut thread_pool = ThreadPool::<i32, i32>::new(2).unwrap();
 
         for idx in 0..num_tasks
         {
@@ -607,13 +621,27 @@ mod tests
     #[test]
     fn ThreadPoolGetNumberOfThreads()
     {
-        let mut thread_pool = ThreadPool::<i32, i32>::new(2);
+        let mut thread_pool = ThreadPool::<i32, i32>::new(2).unwrap();
         assert_eq!(2, thread_pool.get_num_threads());
     
-        thread_pool = ThreadPool::<i32, i32>::new(1);
+        thread_pool = ThreadPool::<i32, i32>::new(1).unwrap();
         assert_eq!(1, thread_pool.get_num_threads());
 
-        thread_pool = ThreadPool::<i32, i32>::new(8);
+        thread_pool = ThreadPool::<i32, i32>::new(8).unwrap();
         assert_eq!(8, thread_pool.get_num_threads());
+    }
+
+    #[test]
+    #[should_panic]
+    fn TestThreadPoolInvalidNumberOfThreads()
+    {
+        let num_tasks: usize = 1;
+
+        fn task(arg: i32) -> i32
+        {
+            return arg;
+        }
+
+        let mut thread_pool = ThreadPool::<i32, i32>::new(0).unwrap();
     }
 }

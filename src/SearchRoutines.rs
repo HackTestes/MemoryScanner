@@ -220,7 +220,7 @@ mod tests
                 fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u32)], usize) -> Vec<usize>,
                 Vec<GenericOSInterface::GenericMemoryRegion>
             ),
-            Vec<Vec<usize>> >::new(num_threads);
+            Vec<Vec<usize>> >::new(num_threads).unwrap();
 
         let operations: Vec<(SearchEngines::ComparisonOperation, u32)> = vec![(ComparisonOperation::Unequal, 1)];
 
@@ -275,7 +275,7 @@ mod tests
                 fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u8)], usize) -> Vec<usize>,
                 Vec<GenericOSInterface::GenericMemoryRegion>
             ),
-            Vec<Vec<usize>> >::new(num_threads);
+            Vec<Vec<usize>> >::new(num_threads).unwrap();
 
         let operations: Vec<(SearchEngines::ComparisonOperation, u8)> = vec![(ComparisonOperation::Equal, 1)];
 
@@ -329,7 +329,7 @@ mod tests
                 fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u16)], usize) -> Vec<usize>,
                 Vec<GenericOSInterface::GenericMemoryRegion>
             ),
-            Vec<Vec<usize>> >::new(num_threads);
+            Vec<Vec<usize>> >::new(num_threads).unwrap();
 
         let operations: Vec<(SearchEngines::ComparisonOperation, u16)> = vec![(ComparisonOperation::Equal, 1)];
 

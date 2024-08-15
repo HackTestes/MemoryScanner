@@ -14,7 +14,8 @@ use std::mem;
 enum SearchErrors
 {
     TargetTypeTooBig,
-    OSInterfaceError(GenericOSInterface::GenericOSErrors)
+    OSInterfaceError(GenericOSInterface::GenericOSErrors),
+    ThreadPoolErrors(ThreadPool::TPErrors)
 }
 
 enum TargetType
@@ -69,13 +70,19 @@ fn StartSearchComparator<T: Send + 'static + Clone>(
 
     // Create the thread pool
     // It must be created here so the search operation can reuse it throughout the entire search
-    let mut thread_pool = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
+    let thread_pool_r = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
                                                     Arc<Vec<u8>>,
                                                     usize,
                                                     Vec<(SearchEngines::ComparisonOperation, T)>,
                                                     fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize) -> Vec<usize>,
                                                     Vec<GenericOSInterface::GenericMemoryRegion>),
                                                     Vec<Vec<usize>> >::new(num_threads);
+
+    let mut thread_pool = match thread_pool_r
+    {
+        Ok(pool) => pool,
+        Err(error) => return Err(SearchErrors::ThreadPoolErrors(error))
+    };
 
     // Loops over the the copy operations needed
     for start_copy_position in snapshot_workload
@@ -216,7 +223,7 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
     };
 
     // Create the thread pool
-    let mut thread_pool = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
+    let thread_pool_r = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
                                                     Arc<Vec<u8>>,
                                                     usize,
                                                     Vec<(SearchEngines::ComparisonOperation, T)>,
@@ -224,6 +231,12 @@ fn FilterSearchComparator<T: Send + 'static + Clone>(
                                                     Vec<GenericOSInterface::GenericMemoryRegion>,
                                                     Arc<Vec<Matches::AddressMatches>>),
                                                     Vec<Vec<usize>> >::new(num_threads);
+
+    let mut thread_pool = match thread_pool_r
+    {
+        Ok(pool) => pool,
+        Err(error) => return Err(SearchErrors::ThreadPoolErrors(error))
+    };
 
     // Loops over the the copy operations needed
     for start_copy_position in snapshot_workload
