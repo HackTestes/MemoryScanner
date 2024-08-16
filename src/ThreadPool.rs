@@ -245,13 +245,13 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
     }
 
 
-    pub fn execute(&mut self, thread_id: usize, args: ARGS, task: fn(args: ARGS) -> RETURN_STRUCT) -> Result<(), String>
+    pub fn execute(&mut self, thread_id: usize, args: ARGS, task: fn(args: ARGS) -> RETURN_STRUCT) -> Result<(), TPErrors>
     {
 
         // One should not send tasks to already assinged threads
         if self.thread_list[thread_id].assigned == true
         {
-            return Err("Thread already has a task assigned to it".to_string());
+            return Err(TPErrors::ThreadAlreadyHasATask);
         }
 
         // Sends a task to the thread
@@ -632,16 +632,35 @@ mod tests
     }
 
     #[test]
-    #[should_panic]
-    fn TestThreadPoolInvalidNumberOfThreads()
+    fn TestThreadPoolInvalidNumberOfThreadsError()
     {
-        let num_tasks: usize = 1;
-
         fn task(arg: i32) -> i32
         {
             return arg;
         }
 
-        let mut thread_pool = ThreadPool::<i32, i32>::new(0).unwrap();
+        let thread_pool = ThreadPool::<i32, i32>::new(0);
+
+        // err() -> Transforms the Result to an Option
+        // The unwrap is an Option method that does not require Debug
+        assert_eq!(TPErrors::InvalidNumberOfThreads, thread_pool.err().unwrap() );
+    }
+
+    #[test]
+    fn TestThreadPoolThreadIsFullError()
+    {
+        fn task(arg: i32) -> i32
+        {
+            return arg;
+        }
+
+        let mut thread_pool = ThreadPool::<i32, i32>::new(1).unwrap();
+
+        // The first run should be ok
+        assert_eq!(Ok(()), thread_pool.execute(0, (1), task));
+
+
+        // Since I did not get the results back, the second run should fail
+        assert_eq!(Err(TPErrors::ThreadAlreadyHasATask), thread_pool.execute(0, (1), task));
     }
 }
