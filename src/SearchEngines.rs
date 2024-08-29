@@ -1,5 +1,13 @@
 use std::mem::size_of;
 
+#[derive(Debug)]
+#[derive(PartialEq)]
+pub enum Engines
+{
+    comparator,
+    exact
+}
+
 // A simple linear search algorithm
 // It simply read byte per byte and check for equality
 fn NaiveLinearSearch()
@@ -16,6 +24,8 @@ fn NaiveLinearSearchPattern()
 }
 
 #[derive(Clone, Copy)]
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub enum ComparisonOperation
 {
     Unequal, // !=

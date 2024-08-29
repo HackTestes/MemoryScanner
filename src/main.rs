@@ -15,6 +15,8 @@ mod WindowsOSInterface;
 mod SearchGlue;
 mod ResultMergerHelpers;
 mod SearchRoutines;
+mod CLIFrontEnd;
+mod Configuration;
 
 use windows_sys::{
     Win32::System::Threading::*, Win32::Foundation::*,

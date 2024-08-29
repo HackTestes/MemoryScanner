@@ -13,6 +13,8 @@ pub struct AddressMatches
     pub matches: Vec<usize>
 }
 
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub enum MatchDisplayStyle
 {
     Decimal,

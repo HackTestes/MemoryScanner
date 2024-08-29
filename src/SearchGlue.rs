@@ -18,7 +18,8 @@ enum SearchErrors
     ThreadPoolErrors(ThreadPool::TPErrors)
 }
 
-enum TargetType
+// REMOVE
+/*enum TargetType
 {
 //    hex_pattern,
 //    string,
@@ -34,7 +35,7 @@ enum TargetType
     u32,
     u64,
     u128
-}
+}*/
 
 // T: Target type
 fn StartSearchComparator<T: Send + 'static + Clone>(

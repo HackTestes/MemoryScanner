@@ -196,9 +196,9 @@ mod tests
     #[test]
     fn TestStartPrallelSearchRoutineBench()
     {
-        let num_threads: usize = 12;
-        let buffer_size: usize = 1*1024*1024*1024;
-        let thread_private_store_size: usize = 100000000;
+        let num_threads: usize = 16;
+        let buffer_size: usize = 32*1024*1024*1024;
+        let thread_private_store_size: usize = 100000;
 
         // Create what would be the representation of the memory in the process
         let mut buffer = vec![0; buffer_size];
@@ -222,7 +222,7 @@ mod tests
             ),
             Vec<Vec<usize>> >::new(num_threads).unwrap();
 
-        let operations: Vec<(SearchEngines::ComparisonOperation, u32)> = vec![(ComparisonOperation::Unequal, 1)];
+        let operations: Vec<(SearchEngines::ComparisonOperation, u32)> = vec![(ComparisonOperation::Equal, 1)];
 
         let timer = time::Instant::now();
         let all_results = StartParallelSearchLinearComparator::<u32>(
