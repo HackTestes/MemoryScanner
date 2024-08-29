@@ -19,7 +19,8 @@ pub enum CommandParsingError
     NotEnoughOperations,
     NoWriteAddress,
     NoTarget,
-    InvalidDisplayStyle
+    InvalidDisplayStyle,
+    InvalidComparisonOperation
 }
 
 // I am using modules to better organize the arguments
@@ -85,7 +86,7 @@ mod Options
     pub mod TargetOperations
     {
         pub const short_option: &str = "-to";
-        pub const long_option: &str = "--target-operations";
+        pub const long_option: &str = "--target-operation";
         pub const description: &str = "Inputs a search operation, which consists of a comparison action and a target value pair: <CMP_OP> <TARGET>. Targets must be values. Valid comparison operations: ==, !=, >, >=, <, <=. Note: you can repeat this option to create a range";
         pub const params: &[&str] = &["<CMP_OPERATION>", "<TARGET_VALUE>"];
     }
@@ -428,7 +429,7 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     "<=" => SearchEngines::ComparisonOperation::LessOrEqual,
                     _ => {
                         eprintln!("Invalid comparison operation of option {}: {}",current_option, cmp_op);
-                        return Err(CommandParsingError::InvalidTargetType);
+                        return Err(CommandParsingError::InvalidComparisonOperation);
                     }
                 };
 
@@ -800,7 +801,6 @@ mod tests
             Err(CommandParsingError::InvalidCopyBufferSize));
     }
 
-    // TODO: Test the values as well
     #[test]
     fn CLITest_Option_TargetType()
     {
@@ -846,6 +846,48 @@ mod tests
     }
 
     #[test]
+    fn CLITest_Option_TargetType_FloatParsing()
+    {
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type f32 -t 10.5".to_string()).unwrap().target_type,
+            TargetType::f32);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type f64 -t 0.005".to_string()).unwrap().target_type,
+            TargetType::f64);
+
+        // You must use "." insted of ","
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type f64 -t 0,005".to_string()),
+            Err(CommandParsingError::InvalidTargetValue));
+    }
+
+    #[test]
+    fn CLITest_Option_TargetType_NegativeIntegerParsing()
+    {
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type i8 -t -10".to_string()).unwrap().target_type,
+            TargetType::i8);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type i16 -t -1".to_string()).unwrap().target_type,
+            TargetType::i16);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type i32 -t -5".to_string()).unwrap().target_type,
+            TargetType::i32);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type i64 -t -10".to_string()).unwrap().target_type,
+            TargetType::i64);
+
+        // -0 is valid
+        assert_eq!(
+            argument_parsing("search -to == 10 --target-type i8 -t -0".to_string()).unwrap().target_type,
+            TargetType::i8);
+    }
+
+    #[test]
     fn CLITest_Option_TargetTypeFail()
     {
         assert_eq!(
@@ -873,8 +915,45 @@ mod tests
             Err(CommandParsingError::InvalidTargetValue));
     }
 
-    // TODO: Add tests for operations
+    #[test]
+    fn CLITest_Option_TargetOperations()
+    {
+        assert_eq!(
+            argument_parsing("search -to == 10 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::Equal, "10".to_string())]);
 
+        assert_eq!(
+            argument_parsing("search --target-operation == 15 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::Equal, "15".to_string())]);
+
+        assert_eq!(
+            argument_parsing("search -to != 10 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::Unequal, "10".to_string())]);
+
+        assert_eq!(
+            argument_parsing("search -to > 10 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::Greater, "10".to_string())]);
+
+        assert_eq!(
+            argument_parsing("search -to >= 10 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::GreaterOrEqual, "10".to_string())]);
+
+        assert_eq!(
+            argument_parsing("search -to < 10 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::Less, "10".to_string())]);
+
+        assert_eq!(
+            argument_parsing("search -to <= 10 -t 10".to_string()).unwrap().operations,
+            vec![(SearchEngines::ComparisonOperation::LessOrEqual, "10".to_string())]);
+    }
+
+    #[test]
+    fn CLITest_Option_TargetOperationsFail()
+    {
+        assert_eq!(
+            argument_parsing("search -to GreaterThan 10 -t 10".to_string()),
+            Err(CommandParsingError::InvalidComparisonOperation));
+    }
 
     #[test]
     fn CLITest_Option_Filter()
