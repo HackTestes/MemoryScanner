@@ -208,6 +208,26 @@ mod Actions
     }
 }
 
+fn is_the_value_valid_for_type(target_string: &str, target_type: &TargetType) -> bool
+{
+    // We do the verification based on the configured target type
+    return match target_type
+    {
+        TargetType::u8 => target_string.parse::<u8>().is_ok(),
+        TargetType::u16 => target_string.parse::<u16>().is_ok(),
+        TargetType::u32 => target_string.parse::<u32>().is_ok(),
+        TargetType::u64 => target_string.parse::<u64>().is_ok(),
+        TargetType::u128 => target_string.parse::<u128>().is_ok(),
+        TargetType::i8 => target_string.parse::<i8>().is_ok(),
+        TargetType::i16 => target_string.parse::<i16>().is_ok(),
+        TargetType::i32 => target_string.parse::<i32>().is_ok(),
+        TargetType::i64 => target_string.parse::<i64>().is_ok(),
+        TargetType::i128 => target_string.parse::<i128>().is_ok(),
+        TargetType::f32 => target_string.parse::<f32>().is_ok(),
+        TargetType::f64 => target_string.parse::<f64>().is_ok(),
+    };
+}
+
 fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
 {
     // Create the default configuration to be later modified
@@ -582,28 +602,11 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
             let target_string = op_pair.1.clone();
 
             // We do the verification based on the configured target type
-            let is_it_valid = match configuration.target_type
-            {
-                TargetType::u8 => target_string.parse::<u8>().is_ok(),
-                TargetType::u16 => target_string.parse::<u16>().is_ok(),
-                TargetType::u32 => target_string.parse::<u32>().is_ok(),
-                TargetType::u64 => target_string.parse::<u64>().is_ok(),
-                TargetType::u128 => target_string.parse::<u128>().is_ok(),
-                TargetType::i8 => target_string.parse::<i8>().is_ok(),
-                TargetType::i16 => target_string.parse::<i16>().is_ok(),
-                TargetType::i32 => target_string.parse::<i32>().is_ok(),
-                TargetType::i64 => target_string.parse::<i64>().is_ok(),
-                TargetType::i128 => target_string.parse::<i128>().is_ok(),
-                TargetType::f32 => target_string.parse::<f32>().is_ok(),
-                TargetType::f64 => target_string.parse::<f64>().is_ok(),
-                _ => {
-                    eprintln!("Invalid target value in operation: {:?}", op_pair);
-                    return Err(CommandParsingError::InvalidTargetType);
-                }
-            };
+            let is_it_valid = is_the_value_valid_for_type(&target_string, &configuration.target_type);
 
             if is_it_valid == false
             {
+                eprintln!("Invalid target value: {}", target_string);
                 return Err(CommandParsingError::InvalidTargetValue);
             }
         }
@@ -618,28 +621,11 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
         let target_string = configuration.target.clone().unwrap();
 
         // We do the verification based on the configured target type
-        let is_it_valid = match configuration.target_type
-        {
-            TargetType::u8 => target_string.parse::<u8>().is_ok(),
-            TargetType::u16 => target_string.parse::<u16>().is_ok(),
-            TargetType::u32 => target_string.parse::<u32>().is_ok(),
-            TargetType::u64 => target_string.parse::<u64>().is_ok(),
-            TargetType::u128 => target_string.parse::<u128>().is_ok(),
-            TargetType::i8 => target_string.parse::<i8>().is_ok(),
-            TargetType::i16 => target_string.parse::<i16>().is_ok(),
-            TargetType::i32 => target_string.parse::<i32>().is_ok(),
-            TargetType::i64 => target_string.parse::<i64>().is_ok(),
-            TargetType::i128 => target_string.parse::<i128>().is_ok(),
-            TargetType::f32 => target_string.parse::<f32>().is_ok(),
-            TargetType::f64 => target_string.parse::<f64>().is_ok(),
-            _ => {
-                eprintln!("Invalid target value in operation: {}", target_string);
-                return Err(CommandParsingError::InvalidTargetType);
-            }
-        };
+        let is_it_valid = is_the_value_valid_for_type(&target_string, &configuration.target_type);
 
         if is_it_valid == false
         {
+            eprintln!("Invalid target value: {}", target_string);
             return Err(CommandParsingError::InvalidTargetValue);
         }
     }
