@@ -160,7 +160,8 @@ pub enum ActionsEnum
     Write,
     Save,
     Restore,
-    Remove
+    Remove,
+    Exit
 }
 
 mod Actions
@@ -169,6 +170,12 @@ mod Actions
     {
         pub const text: &str = "help";
         pub const description: &str = "Does the same thing as the help option (displays help text). This is simply to help new users";
+    }
+
+    pub mod Exit
+    {
+        pub const text: &str = "exit";
+        pub const description: &str = "Exits from the command line, terminating the program";
     }
 
     pub mod Search
@@ -245,6 +252,7 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     configuration.action = match action.as_str()
     {
         Actions::Help::text    => ActionsEnum::Help,
+        Actions::Exit::text    => ActionsEnum::Exit,
         Actions::Search::text  => ActionsEnum::Search,
         Actions::Write::text   => ActionsEnum::Write,
         Actions::Save::text    => ActionsEnum::Save,
@@ -261,6 +269,13 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     {
         println!("HELP PLACEHOLDER");
         configuration.help = true;
+        return Ok(configuration);
+    }
+
+    // The user wants to finish the execution
+    if configuration.action == ActionsEnum::Exit
+    {
+        configuration.exit = true;
         return Ok(configuration);
     }
 
@@ -657,8 +672,27 @@ mod tests
     #[test]
     fn CLITest_Action_Help()
     {
-        let parsing_result = argument_parsing("help".to_string());
-        assert_eq!(parsing_result.unwrap().help, true);
+        // Default
+        assert_eq!(
+            argument_parsing("exit".to_string()).unwrap().help,
+            false);
+
+        assert_eq!(
+            argument_parsing("help".to_string()).unwrap().help,
+            true);
+    }
+
+    #[test]
+    fn CLITest_Action_Exit()
+    {
+        // Default
+        assert_eq!(
+            argument_parsing("help".to_string()).unwrap().exit,
+            false);
+
+        assert_eq!(
+            argument_parsing("exit".to_string()).unwrap().exit,
+            true);
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub struct Config
 {
     pub action: CLIFrontEnd::ActionsEnum,
     pub help: bool,
+    pub exit: bool,
     pub num_threads: u64,
     pub thread_storage: usize,
     pub target_type: TargetType,
@@ -56,6 +57,9 @@ impl Config
 
             // This tells to the inout loop that we simply asked for help and should retry the command immediately
             help: false,
+
+            // This controls if the user wants to terminate the program
+            exit: false,
 
             // It needs at least 1 thread to work
             num_threads: 1,
