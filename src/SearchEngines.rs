@@ -2,6 +2,7 @@ use std::mem::size_of;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub enum Engines
 {
     comparator,

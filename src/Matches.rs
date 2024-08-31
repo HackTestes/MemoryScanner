@@ -15,6 +15,7 @@ pub struct AddressMatches
 
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub enum MatchDisplayStyle
 {
     Decimal,

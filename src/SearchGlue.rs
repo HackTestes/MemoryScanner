@@ -11,34 +11,15 @@ use std::mem;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-enum SearchErrors
+pub enum SearchErrors
 {
     TargetTypeTooBig,
     OSInterfaceError(GenericOSInterface::GenericOSErrors),
     ThreadPoolErrors(ThreadPool::TPErrors)
 }
 
-// REMOVE
-/*enum TargetType
-{
-//    hex_pattern,
-//    string,
-    f32,
-    f64,
-    i8,
-    i16,
-    i32,
-    i64,
-    i128,
-    u8,
-    u16,
-    u32,
-    u64,
-    u128
-}*/
-
 // T: Target type
-fn StartSearchComparator<T: Send + 'static + Clone>(
+pub fn StartSearchComparator<T: Send + 'static + Clone>(
     page_permissions_at_least: GenericOSInterface::GenericPageProtections,
     page_permissions_exact: Option<GenericOSInterface::GenericPageProtections>,
     region_state: Option<GenericOSInterface::GenericRegionState>,
@@ -179,7 +160,7 @@ fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_type
     return Ok(ajusted_mem_regions);
 }
 
-fn FilterSearchComparator<T: Send + 'static + Clone>(
+pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     previous_results: Vec<Matches::AddressMatches>,
     process_handle: &GenericOSInterface::GenericProcess,
     num_threads: usize,
