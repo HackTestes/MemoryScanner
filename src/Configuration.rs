@@ -68,7 +68,7 @@ impl Config
 
             // 10 million results per thread is reasonable (8bytes * 10,000,000 = 77MiB) - nice trade-off between speed and storage
             // 8bytes: size of usize (if this changes, so does the calculation)
-            thread_storage: 10000000,
+            thread_storage: 10000,
 
             // u8 is essentially valid for everything (if the value isn't negative of bigger than 256)
             target_type: TargetType::u8,
