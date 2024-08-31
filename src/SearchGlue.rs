@@ -181,6 +181,10 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         Ok(ajusted_pages) => ajusted_pages,
         Err(error) => return Err(error),
     };
+    
+    // DEBUG ONLY
+    //println!("Previous results: {:#?}", previous_results.iter().map(|x| return(x.mem_region.clone(), x.matches.len())).collect::<Vec<(_, _)>>());
+    //println!("Page original: {:#?} \nPage ajusted: {:#?}", previous_results[0], memory_regions[0]);
 
     let original_memory_regions: Vec<GenericOSInterface::GenericMemoryRegion> = previous_results.iter().map(|x| x.mem_region.clone()).collect();
 
@@ -219,6 +223,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         Ok(pool) => pool,
         Err(error) => return Err(SearchErrors::ThreadPoolErrors(error))
     };
+
 
     // Loops over the the copy operations needed
     for start_copy_position in snapshot_workload

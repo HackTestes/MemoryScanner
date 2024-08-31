@@ -151,7 +151,7 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                     let buff_start = start + current_buffer_pos;
 
                     let end = region_workload.1;
-                    let buff_end = end + current_buffer_pos;
+                    let buff_end = previous_matches[region_idx].matches.last().unwrap() + current_buffer_pos;
 
                     // DEBUG ONLY
                     //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
