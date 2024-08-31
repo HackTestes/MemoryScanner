@@ -1,10 +1,11 @@
 use std::env;
 use std::io;
 use std::io::Write;
-mod args_parse;
+use std::time::Duration;
+use std::thread;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 mod Config;
-mod ReadMemory;
-mod WriteMemory;
 mod ThreadPool;
 mod WorkloadPartitioning;
 mod SearchEngines;
@@ -18,12 +19,7 @@ mod SearchRoutines;
 mod CLIFrontEnd;
 mod Configuration;
 
-use windows_sys::{
-    Win32::System::Threading::*, Win32::Foundation::*,
-    Win32::System::Memory::*, core::*,
-};
-
-fn GetNumberOfMatches(all_matches: &Vec<ReadMemory::MemoryMatches>) -> usize
+fn GetNumberOfMatches(all_matches: &Vec<Matches::AddressMatches>) -> usize
 {
     let mut match_num = 0;
     for result_section in all_matches
@@ -34,100 +30,601 @@ fn GetNumberOfMatches(all_matches: &Vec<ReadMemory::MemoryMatches>) -> usize
     return match_num;
 }
 
+fn parse_operations<T: std::str::FromStr>(target_operations: Vec<(SearchEngines::ComparisonOperation, String)>) -> Vec<(SearchEngines::ComparisonOperation, T)>
+    where T: std::str::FromStr, <T as std::str::FromStr>::Err : std::fmt::Debug // Restrict the type to be able to be a string and be displayed by debug (https://github.com/rust-lang/rust/issues/43262)
+{
+    let mut parsed_operations = vec![];
+
+    for op_pair in target_operations
+    {
+        // It shouldn't panic here if the front end did the correct validation
+        parsed_operations.push( (op_pair.0, op_pair.1.parse::<T>().unwrap()) );
+    }
+
+    return parsed_operations;
+}
+
+// This function is here to help me with code reuse (normal action and the freeze option)
+fn write_action_subroutine(command_config: &Configuration::Config, process_handle: &GenericOSInterface::GenericProcess)
+{
+    let write_result = match command_config.target_type
+    {
+        // Each operation takes the target string (which should have been verified by the parsing),
+        // parses it to the right type
+        // and then makes it into a byte representation
+
+        // Unsigned integer
+        Configuration::TargetType::u8 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<u8>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::u16 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<u16>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::u32 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<u32>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::u64 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<u64>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::u128 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<u128>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        // Signed integer
+        Configuration::TargetType::i8 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<i8>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::i16 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<i16>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::i32 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<i32>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::i64 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<i64>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::i128 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<i128>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        // Float
+        Configuration::TargetType::f32 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<f32>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+
+        Configuration::TargetType::f64 => process_handle.write_into_vm( &command_config.target.clone().unwrap().parse::<f64>().unwrap().to_ne_bytes(), command_config.write_abs_addr.unwrap()),
+    };
+
+    // TODO: Report the errors back to the user in a better way (if possible)
+    if write_result.is_err()
+    {
+        eprintln!("Error in writing operation: {:?}", write_result);
+    }
+
+    println!("Write successful!");
+}
+
+fn engine_subroutine(command_config: Configuration::Config, mut results: Vec<Matches::AddressMatches>, process_handle: &GenericOSInterface::GenericProcess)
+{
+    println!("Starting search");
+
+    if command_config.engine == SearchEngines::Engines::comparator
+    {
+        // It we are not filtering, we should start a new search
+        if command_config.freeze == false
+        {
+            results = match command_config.target_type
+            {
+                Configuration::TargetType::u8 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_u8, 
+                    parse_operations::<u8>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u16 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_u16, 
+                    parse_operations::<u16>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u32 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_u32, 
+                    parse_operations::<u32>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u64 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_u64, 
+                    parse_operations::<u64>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u128 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_u128, 
+                    parse_operations::<u128>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i8 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_i8, 
+                    parse_operations::<i8>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i16 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_i16, 
+                    parse_operations::<i16>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i32 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_i32, 
+                    parse_operations::<i32>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i64 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_i64, 
+                    parse_operations::<i64>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i128 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_i128, 
+                    parse_operations::<i128>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::f32 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_f32, 
+                    parse_operations::<f32>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::f64 => SearchGlue::StartSearchComparator(
+                    command_config.page_permissions_at_least,
+                    command_config.page_permissions_exact,
+                    Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_Comparator_f64, 
+                    parse_operations::<f64>(command_config.operations)
+                ).unwrap(),
+            };
+        }
+
+        // Here we filter the previous matches
+        else
+        {
+            results = match command_config.target_type
+            {
+                Configuration::TargetType::u8 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_u8,
+                    parse_operations::<u8>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u16 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_u16,
+                    parse_operations::<u16>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u32 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_u32,
+                    parse_operations::<u32>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u64 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_u64,
+                    parse_operations::<u64>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::u128 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_u128,
+                    parse_operations::<u128>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i8 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_i8,
+                    parse_operations::<i8>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i16 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_i16,
+                    parse_operations::<i16>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i32 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_i32,
+                    parse_operations::<i32>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i64 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_i64,
+                    parse_operations::<i64>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::i128 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_i128,
+                    parse_operations::<i128>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::f32 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_f32,
+                    parse_operations::<f32>(command_config.operations)
+                ).unwrap(),
+
+                Configuration::TargetType::f64 => SearchGlue::FilterSearchComparator(
+                    results,
+                    process_handle,
+                    command_config.num_threads,
+                    command_config.copy_buffer_size,
+                    command_config.thread_storage,
+                    SearchEngines::LinearSearch_ComparatorFilter_f64,
+                    parse_operations::<f64>(command_config.operations)
+                ).unwrap(),
+            };
+        }
+    }
+
+    if command_config.engine == SearchEngines::Engines::exact
+    {
+        eprintln!("Exact engine not supported yet!");
+    }
+}
+
 fn main()
 {
+    // Get the arguments from command line
+    // We only need to check for help, otherwise I expect a fixed position of args
     let args: Vec<String> = env::args().collect();
+
+    // Does the user need help?
+    if &args[1] == "--help" && &args[1] == "--help"
+    {
+        println!("HELP PLACEHOLDER");
+        return;
+    }
+
+    // We have verified for help already, use the normal command now
+    // PID
     let arg = &args[1];
 
-    let process_id: u32 = arg.parse::<u32>().unwrap();
+    // Is the PID valid?
+    let process_id_r = arg.parse::<u64>();
 
-    unsafe
+    let process_id: u64 = if process_id_r.is_ok(){process_id_r.unwrap()} else
     {
-        let process_handle: windows_sys::Win32::Foundation::HANDLE = windows_sys::Win32::System::Threading::OpenProcess(windows_sys::Win32::System::Threading::PROCESS_QUERY_INFORMATION |
-                                                                        windows_sys::Win32::System::Threading::PROCESS_VM_OPERATION |
-                                                                        windows_sys::Win32::System::Threading::PROCESS_VM_READ |
-                                                                        windows_sys::Win32::System::Threading::PROCESS_VM_WRITE,
-                                                                        0, // False
-                                                                        process_id);
+        eprintln!("The process ID given is nor valid");
+        return;
+    };
 
-        println!("Process attached! Id- {}", process_id);
+    // Now attach to the process and verify any errors
+    // Note: I am being lazy and using unwrap directly, but this is not user friendly at all
+    let mut process_handle: GenericOSInterface::GenericProcess = GenericOSInterface::GenericProcess::attach(process_id).unwrap();
+    println!("Process attached! PID: {}", process_id);
 
-        // Store the results from searches
-        let mut result: Vec<ReadMemory::MemoryMatches> = Vec::new();
+    // Now that the process was SUCCESSFULLY attached...
 
-        // main loop
+    // We create our storage for results
+    let mut results: Vec<Matches::AddressMatches> = vec![];
+
+    // And the saved results as well
+    let mut saved_results: Vec< Vec<Matches::AddressMatches> >= vec![];
+
+
+    // Main search loop
+    loop
+    {
+        // We can ask to the user for inputs on what to do here
+        let command_config: Configuration::Config;
         loop
         {
-            let command_config;
-            loop
+            // Get the user input
+            let mut command = String::new();
+            print!("\n -------------------------------------------------- \n\ncommand> ");
+
+            // Clear all previous things in the stdout, so it doesn't get mixed in the command input
+            std::io::stdout().flush().unwrap();
+
+            // Read the command
+            io::stdin().read_line(&mut command).expect("failed to read line");
+
+            print!("\n");
+
+            // Parse commands and return a config
+            let command_result = CLIFrontEnd::argument_parsing( String::from(command.trim()) );
+
+            // If we get a valid command
+            if command_result.is_ok()
             {
-                // Get the command
-                let mut command = String::new();
-                print!("\n -------------------------------------------------- \n\ncommand> ");
-                std::io::stdout().flush().unwrap();
-                io::stdin().read_line(&mut command).expect("failed to readline");
-
-                print!("\n");
-
-                // Parse commands and return a config
-                let command_result = args_parse::ParseArg( String::from(command.trim()) );
-
-                if command_result.is_ok()
-                {
-                    command_config = command_result.unwrap();
-                    break;
-                }
+                command_config = command_result.unwrap();
+                break;
             }
+        }
 
-            if command_config.help == true
-            {
-                continue;
-            }
+        // Do what the user asked based on the configuration
 
-            // Execute the right action
-            match command_config.action
+        // Early help
+        if command_config.help == true
+        {
+            // There is no need to print anything here, the argument parsing will do it already
+            continue;
+        }
+
+        match command_config.action
+        {
+            // This works in the same way as the help option
+            CLIFrontEnd::ActionsEnum::Help => continue,
+
+            CLIFrontEnd::ActionsEnum::Search =>
             {
-                // Memory search
-                Config::Action::Search =>
+                println!("Starting search");
+
+                if command_config.engine == SearchEngines::Engines::comparator
                 {
-                    println!("Search Started!");
-                    if command_config.scan_start == Config::ScanStartFlag::NewScan
+                    results = match command_config.target_type
                     {
-                        result = ReadMemory::SearchProcessMemory_Initial(command_config.filters, command_config.thread_count, command_config.value_to_search, process_handle);
-                        println!("Number of matches: {}", GetNumberOfMatches(&result));
+                        Configuration::TargetType::u8 => SearchGlue::StartSearchComparator(
+                            command_config.page_permissions_at_least,
+                            command_config.page_permissions_exact,
+                            Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
+                            &process_handle,
+                            command_config.num_threads,
+                            command_config.copy_buffer_size,
+                            command_config.thread_storage,
+                            SearchEngines::LinearSearch_Comparator_u8, 
+                            parse_operations::<u8>(command_config.operations)
+                        ).unwrap(),
+
+                        _ => todo!(),
+                    };
+                }
+
+                if command_config.engine == SearchEngines::Engines::exact
+                {
+                    eprintln!("Exact engine not supported yet!");
+                }
+            },
+
+            CLIFrontEnd::ActionsEnum::Display =>
+            {
+                println!("Number of sections: {}\n", &results.len());
+
+                for result_section in &results
+                {
+                    println!("Num of sections with matches: {} \n\n", &result_section.matches.len());
+
+                    match command_config.display_style
+                    {
+                        Matches::MatchDisplayStyle::Hex =>
+                        {
+                            println!("\tMatches addresses: {} \n", &result_section.display_matches(command_config.display_style.clone()));
+                        },
+
+                        Matches::MatchDisplayStyle::Decimal =>
+                        {
+                            println!("\tMatches addresses: {} \n", &result_section.display_matches(command_config.display_style.clone()));
+                        }
+                    }
+                }
+            },
+
+            CLIFrontEnd::ActionsEnum::Write =>
+            {
+                if command_config.freeze == false
+                {
+                    write_action_subroutine(&command_config, &process_handle);
+                }
+
+                else
+                {
+                    // Create an atomic to signal thread stop
+                    // An atomic is easier to share, but we don't care about race conditions in this case
+                    let should_thread_stop = Arc::new(AtomicBool::new(false));
+
+                    // The thread can only read the atomic
+                    let should_thread_stop_read = Arc::clone(&should_thread_stop);
+
+                    // We must also share the handle with the thread
+                    // This will take ownership of the handle, so we must give it back
+                    let process_handle_arc_main = Arc::new(process_handle);
+                    let process_handle_arc_thread = process_handle_arc_main.clone();
+
+                    let config_clone = command_config.clone();
+
+                    let thread_join_handle = thread::spawn(move ||
+                    {
+                        let millis = Duration::from_millis(config_clone.freeze_interval_ms);
+                        loop
+                        {
+                            // write memory
+                            write_action_subroutine(&config_clone, &process_handle_arc_thread);
+                
+                            // sleep
+                            thread::sleep(millis);
+                
+                            // read mutex
+                            if (should_thread_stop_read.load(Ordering::Relaxed)) == true
+                            {
+                                break;
+                            }
+                        }
+                    });
+                
+                    let mut command = String::new();
+                    println!("Press ENTER to stop freeze and continue");
+                    std::io::stdout().flush().unwrap();
+                    io::stdin().read_line(&mut command).expect("failed to read line");
+                
+                    // only the main thread can write
+                    should_thread_stop.store(true, Ordering::Relaxed);
+
+                    // Ignore errors here - but if something goes bad, crash loudly
+                    let res = thread_join_handle.join().unwrap();
+
+                    // Now take the handle back
+                    process_handle = Arc::try_unwrap(process_handle_arc_main).unwrap();
+                }
+            },
+
+            CLIFrontEnd::ActionsEnum::Save =>
+            {
+                // Copy the results to the saved buffer, leaving the original results untouched
+                saved_results.push(results.clone());
+                println!("Results saved! Now with: {} results", saved_results.len());
+            },
+
+            CLIFrontEnd::ActionsEnum::Restore =>
+            {
+                if command_config.restore_entry == None
+                {
+                    // Similar to pop, but doesn't remove
+                    // The user might need to reuse such result, so don't remove it
+                    results = saved_results[saved_results.len()-1].clone();
+                    println!("Restored the last saved result");
+                }
+
+                else
+                {
+                    let entry_idx: usize = command_config.restore_entry.unwrap();
+
+                    if entry_idx < saved_results.len()
+                    {
+                        results = saved_results[entry_idx].clone();
+                        println!("Restored entry {}", entry_idx);
                     }
                     else
                     {
-                        result = ReadMemory::FilterMatches(&mut result, command_config.filters, command_config.thread_count, command_config.value_to_search, process_handle);
-                        println!("Number of matches: {}", GetNumberOfMatches(&result));
+                        eprintln!("Entry index is too big");
                     }
-                },
+                }
+            },
 
-                // Memory writes
-                Config::Action::WriteMemory =>
+            CLIFrontEnd::ActionsEnum::Remove =>
+            {
+                if command_config.remove_all_saved_entries == false
                 {
-                    let success = WriteMemory::WriteIntoProcessMemory_EntryPoint(process_handle, &result, command_config.value_to_search, command_config.freeze, command_config.sleep_time, command_config.filters[0].clone());
+                    saved_results.pop();
+                    println!("Last saved result removed. Now with: {}", saved_results.len());
+                }
 
-                    if success.is_ok() {println!("Write successful!");} else {println!("Error on write!");}
-                },
-
-                // Display the results to the user
-                Config::Action::Display =>
+                else
                 {
-                    println!("Number of sections: {}\n", &result.len());
+                    saved_results.clear();
+                    println!("All saved results removed. Now with: {}", saved_results.len());
+                }
+            },
 
-                    for result_section in &result
-                    {
-                        println!("Section matches: {} \n\n\tMatches addresses: {:?} \n", &result_section.matches.len(), &result_section.get_absolute_virtual_address());
-                    }
-                },
-
-                // Exit the program
-                Config::Action::Exit => break,
-            }
-
+            CLIFrontEnd::ActionsEnum::Exit => break,
         }
-
-        windows_sys::Win32::Foundation::CloseHandle(process_handle);
     }
 }
