@@ -90,16 +90,16 @@ fn write_action_subroutine(command_config: &Configuration::Config, process_handl
     println!("Write successful!");
 }
 
-fn engine_subroutine(command_config: Configuration::Config, mut results: Vec<Matches::AddressMatches>, process_handle: &GenericOSInterface::GenericProcess)
+fn engine_comparator_subroutine(command_config: Configuration::Config, mut results: Vec<Matches::AddressMatches>, process_handle: &GenericOSInterface::GenericProcess) -> Vec<Matches::AddressMatches>
 {
-    println!("Starting search");
+    let mut search_results = vec![];
 
     if command_config.engine == SearchEngines::Engines::comparator
     {
         // It we are not filtering, we should start a new search
-        if command_config.freeze == false
+        if command_config.filter == false
         {
-            results = match command_config.target_type
+            search_results = match command_config.target_type
             {
                 Configuration::TargetType::u8 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -250,7 +250,8 @@ fn engine_subroutine(command_config: Configuration::Config, mut results: Vec<Mat
         // Here we filter the previous matches
         else
         {
-            results = match command_config.target_type
+            println!("Filtering results");
+            search_results = match command_config.target_type
             {
                 Configuration::TargetType::u8 => SearchGlue::FilterSearchComparator(
                     results,
@@ -375,10 +376,7 @@ fn engine_subroutine(command_config: Configuration::Config, mut results: Vec<Mat
         }
     }
 
-    if command_config.engine == SearchEngines::Engines::exact
-    {
-        eprintln!("Exact engine not supported yet!");
-    }
+    return search_results;
 }
 
 fn main()
@@ -390,7 +388,7 @@ fn main()
     // Does the user need help?
     if &args[1] == "--help" || &args[1] == "-h"
     {
-        println!("HELP PLACEHOLDER");
+        println!("HELP PLACEHOLDERr");
         return;
     }
 
@@ -471,27 +469,15 @@ fn main()
 
                 if command_config.engine == SearchEngines::Engines::comparator
                 {
-                    results = match command_config.target_type
-                    {
-                        Configuration::TargetType::u8 => SearchGlue::StartSearchComparator(
-                            command_config.page_permissions_at_least,
-                            command_config.page_permissions_exact,
-                            Some(GenericOSInterface::GenericRegionState::Resident), // State - It doesn't make sense to read memory that isn't in RAM
-                            &process_handle,
-                            command_config.num_threads,
-                            command_config.copy_buffer_size,
-                            command_config.thread_storage,
-                            SearchEngines::LinearSearch_Comparator_u8, 
-                            parse_operations::<u8>(command_config.operations)
-                        ).unwrap(),
-
-                        _ => todo!(),
-                    };
+                    results = engine_comparator_subroutine(command_config, results, &process_handle);
+                    println!("{} matches found", GetNumberOfMatches(&results));
+                    continue;
                 }
 
                 if command_config.engine == SearchEngines::Engines::exact
                 {
                     eprintln!("Exact engine not supported yet!");
+                    continue;
                 }
             },
 
@@ -501,18 +487,19 @@ fn main()
 
                 for result_section in &results
                 {
-                    println!("Num of sections with matches: {} \n\n", &result_section.matches.len());
+                    // TODO: add this to the display function
+                    println!("Num of matches in the section: {} \n", &result_section.matches.len());
 
                     match command_config.display_style
                     {
                         Matches::MatchDisplayStyle::Hex =>
                         {
-                            println!("\tMatches addresses: {} \n", &result_section.display_matches(command_config.display_style.clone()));
+                            println!("Matches addresses: {} \n", &result_section.display_matches(command_config.display_style.clone()));
                         },
 
                         Matches::MatchDisplayStyle::Decimal =>
                         {
-                            println!("\tMatches addresses: {} \n", &result_section.display_matches(command_config.display_style.clone()));
+                            println!("Matches addresses: {} \n", &result_section.display_matches(command_config.display_style.clone()));
                         }
                     }
                 }
