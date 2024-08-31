@@ -34,6 +34,7 @@ pub fn get_process_handle(process_id: u64) -> Result<windows_sys::Win32::Foundat
     // If it returns NULL (0), something went wrong
     if handle == 0
     {
+        eprintln!("Error from opening a process. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
@@ -260,6 +261,7 @@ pub fn write_into_process_vm(process_handle: windows_sys::Win32::Foundation::HAN
     // If it returns NULL (0), something went wrong
     if success_code == 0
     {
+        eprintln!("Error from write. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
@@ -283,17 +285,23 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
                           transfered_bytes_ptr)
     };
 
+    //println!("Process_handle: {} \nAbsolute VM addr: {} \nBuffer ptr: {} \nBuffer len: {} \nTrasferred bytes: {}\n\n", process_handle, absolute_vm_address, buffer.as_mut_ptr() as usize, buffer.len(), transfered_bytes);
+
     // If it returns NULL (0), something went wrong
     // Was it successful?
     if success_code == 0
     {
         // No
-        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+        eprintln!("Error from read. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        buffer.fill(0);
+        return Ok(());
+        //return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
     // It was successful, but it only made a partial copy
     if (transfered_bytes != 0) && (transfered_bytes != buffer.len())
     {
+        eprintln!("Error from read. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::PartialReadCopy)
     }
 
