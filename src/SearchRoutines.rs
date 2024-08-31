@@ -116,6 +116,7 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
         // Send the task to each thread
         for t_idx in 0..thread_pool.get_num_threads()
         {
+            println!("Threads: {}", thread_pool.get_num_threads());
             // Each vector is directly associated to a region
             thread_pool.execute(t_idx,
                 (mem::take(&mut thread_workload[t_idx]),
@@ -151,10 +152,14 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                     let buff_start = start + current_buffer_pos;
 
                     let end = region_workload.1;
-                    let buff_end = previous_matches[region_idx].matches.last().unwrap() + current_buffer_pos;
+                    let buff_end = regions[region_idx].size_bytes + current_buffer_pos;
 
                     // DEBUG ONLY
                     //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
+                    //println!("Current region: {:?}", regions[region_idx]);
+                    //println!("Current task: {:?}", region_workload);
+                    //println!("Matches: {:#?}", previous_matches[region_idx].matches);
+                    //println!("Start and end buffer: {:?}", (buff_start, buff_end));
 
                     thread_results.push(t_task(
                         &arc_buffer[buff_start..buff_end], // Filter operations have access to the whole buffer, relative to that region
