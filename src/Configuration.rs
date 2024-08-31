@@ -1,9 +1,11 @@
 use crate::SearchEngines;
 use crate::CLIFrontEnd;
 use crate::Matches;
+use crate::GenericOSInterface;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub enum TargetType
 {
 //    hex_pattern,
@@ -24,12 +26,12 @@ pub enum TargetType
 
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub struct Config
 {
     pub action: CLIFrontEnd::ActionsEnum,
     pub help: bool,
-    pub exit: bool,
-    pub num_threads: u64,
+    pub num_threads: usize,
     pub thread_storage: usize,
     pub target_type: TargetType,
     pub target: Option<String>,
@@ -37,10 +39,13 @@ pub struct Config
     pub copy_buffer_size: usize,
     pub filter: bool,
     pub engine: SearchEngines::Engines,
+    pub page_permissions_at_least: GenericOSInterface::GenericPageProtections,
+    pub page_permissions_exact: Option<GenericOSInterface::GenericPageProtections>,
     pub display_style: Matches::MatchDisplayStyle,
     pub remove_all_saved_entries: bool,
     pub restore_entry: Option<usize>,
     pub freeze: bool,
+    pub freeze_interval_ms: usize,
     pub write_abs_addr: Option<usize>
 }
 
@@ -55,11 +60,8 @@ impl Config
             // Using help seems like the safest action as it does "nothing" (dangerous)
             action: CLIFrontEnd::ActionsEnum::Help,
 
-            // This tells to the inout loop that we simply asked for help and should retry the command immediately
+            // This tells to the inout loop that we simply asked for help and should retry the command immediately (this is for the help OPTION)
             help: false,
-
-            // This controls if the user wants to terminate the program
-            exit: false,
 
             // It needs at least 1 thread to work
             num_threads: 1,
@@ -86,6 +88,12 @@ impl Config
             // Use the comparator as the default engine
             engine: SearchEngines::Engines::comparator,
 
+            // Read and Write would be sensible default for most searches
+            page_permissions_at_least: GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+
+            // Since the exact match can exclude a lot of stuff, better leave it as None
+            page_permissions_exact: None,
+
             // Use hex as the default, because most places use hex (this will ease the use for many users)
             display_style: Matches::MatchDisplayStyle::Hex,
 
@@ -97,6 +105,9 @@ impl Config
 
             // By default, only write once
             freeze: false,
+
+            // Controls the sleep time of the freeze option in miliseconds
+            freeze_interval_ms: 1000,
 
             // Writing to memory needs a position, so use an Option to reflect that
             write_abs_addr: None

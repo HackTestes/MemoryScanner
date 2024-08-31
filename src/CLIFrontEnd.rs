@@ -1,6 +1,7 @@
 use crate::Configuration::*;
 use crate::SearchEngines;
 use crate::Matches;
+use crate::GenericOSInterface;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
@@ -20,7 +21,9 @@ pub enum CommandParsingError
     NoWriteAddress,
     NoTarget,
     InvalidDisplayStyle,
-    InvalidComparisonOperation
+    InvalidComparisonOperation,
+    InvalidPagePermission,
+    InvalidFreezeInterval
 }
 
 // I am using modules to better organize the arguments
@@ -106,6 +109,22 @@ mod Options
         pub const params: &[&str] = &["<ENGINE_NAME>"];
     }
 
+    pub mod PagePermissionsAtLeast
+    {
+        pub const short_option: &str = "-pal";
+        pub const long_option: &str = "--page-perms-at-least";
+        pub const description: &str = "Selects the permissions the the page must at least have to searched, this means that 'read|write' will also get pages that have 'execute' as long as it can be read and written. Example: read, read|write (execute pages are also valid), read|write|execute";
+        pub const params: &[&str] = &["<PAGE_PERMS[|...]>"];
+    }
+
+    pub mod PagePermissionsExact
+    {
+        pub const short_option: &str = "-pe";
+        pub const long_option: &str = "--page-perms-exact";
+        pub const description: &str = "Selects the permissions the the page have to searched, but it is an exact match. This means that 'read|write' excludes all 'execute' pages Example: read, read|write (execute pages are NOT valid), read|write|execute";
+        pub const params: &[&str] = &["<PAGE_PERMS[|...]>"];
+    }
+
     // Display options
 
     pub mod DisplayStyle
@@ -142,6 +161,14 @@ mod Options
         pub const description: &str = "Freeze a value in memory by repeatedly writing the same target (Note: you need a absolute address specified)";
     }
 
+    pub mod FreezeInterval
+    {
+        pub const short_option: &str = "-fzi";
+        pub const long_option: &str = "--freeze-interval";
+        pub const description: &str = "Controls the interval in which the target is written to the observed process in miliseconds";
+        pub const params: &[&str] = &["<FREEZE_INTERVAL_MS>"];
+    }
+
     pub mod WriteAbsAddr
     {
         pub const short_option: &str = "-aa";
@@ -153,10 +180,12 @@ mod Options
 
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[derive(Clone)]
 pub enum ActionsEnum
 {
     Help,
     Search,
+    Display,
     Write,
     Save,
     Restore,
@@ -235,7 +264,29 @@ fn is_the_value_valid_for_type(target_string: &str, target_type: &TargetType) ->
     };
 }
 
-fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
+fn page_permissions_parse(page_permissions_string: &str) -> Result< GenericOSInterface::GenericPageProtections, CommandParsingError>
+{
+    let individual_permissions = page_permissions_string.split("|");
+
+    let mut final_permission: GenericOSInterface::GenericPageProtections = GenericOSInterface::PageProtection_NoAccess;
+
+    for perm in individual_permissions
+    {
+        match perm
+        {
+            "read" => final_permission |= GenericOSInterface::PageProtection_Read,
+            "write" => final_permission |= GenericOSInterface::PageProtection_Write,
+            "execute" => final_permission |= GenericOSInterface::PageProtection_Execute,
+            _ => {
+                return Err(CommandParsingError::InvalidPagePermission);
+            }
+        }
+    }
+
+    return Ok(final_permission);
+}
+
+pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
 {
     // Create the default configuration to be later modified
     let mut configuration = Config::new();
@@ -253,6 +304,7 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     {
         Actions::Help::text    => ActionsEnum::Help,
         Actions::Exit::text    => ActionsEnum::Exit,
+        Actions::Display::text => ActionsEnum::Display,
         Actions::Search::text  => ActionsEnum::Search,
         Actions::Write::text   => ActionsEnum::Write,
         Actions::Save::text    => ActionsEnum::Save,
@@ -269,13 +321,6 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     {
         println!("HELP PLACEHOLDER");
         configuration.help = true;
-        return Ok(configuration);
-    }
-
-    // The user wants to finish the execution
-    if configuration.action == ActionsEnum::Exit
-    {
-        configuration.exit = true;
         return Ok(configuration);
     }
 
@@ -328,7 +373,7 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let num_threads_r = command_list[opt_index+1].parse::<u64>();
+                let num_threads_r = command_list[opt_index+1].parse::<usize>();
 
                 if num_threads_r.is_err()
                 {
@@ -510,6 +555,48 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                 opt_index += Options::Engine::params.len(); // Jumps the input param
             },
 
+            Options::PagePermissionsAtLeast::short_option | Options::PagePermissionsAtLeast::long_option =>
+            {
+                // Validate size
+                if opt_index+Options::PagePermissionsAtLeast::params.len() >= command_list.len()
+                {
+                    eprintln!("Missing parameter");
+                    return Err(CommandParsingError::MissingParameter);
+                }
+
+                let page_perms_r = page_permissions_parse(command_list[opt_index+1]);
+
+                if page_perms_r.is_err()
+                {
+                    eprintln!("Invalid page permission of option {}: {}", current_option, command_list[opt_index+1]);
+                    return Err(CommandParsingError::InvalidPagePermission);
+                }
+
+                configuration.page_permissions_at_least = page_perms_r.unwrap();
+                opt_index += Options::PagePermissionsAtLeast::params.len(); // Jumps the input param
+            },
+
+            Options::PagePermissionsExact::short_option | Options::PagePermissionsExact::long_option =>
+            {
+                // Validate size
+                if opt_index+Options::PagePermissionsExact::params.len() >= command_list.len()
+                {
+                    eprintln!("Missing parameter");
+                    return Err(CommandParsingError::MissingParameter);
+                }
+
+                let page_perms_r = page_permissions_parse(command_list[opt_index+1]);
+
+                if page_perms_r.is_err()
+                {
+                    eprintln!("Invalid page permission of option {}: {}", current_option, command_list[opt_index+1]);
+                    return Err(CommandParsingError::InvalidPagePermission);
+                }
+
+                configuration.page_permissions_exact = Some(page_perms_r.unwrap());
+                opt_index += Options::PagePermissionsExact::params.len(); // Jumps the input param
+            },
+
             Options::DisplayStyle::short_option | Options::DisplayStyle::long_option =>
             {
                 // Validate size
@@ -564,6 +651,27 @@ fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
             Options::Freeze::short_option | Options::Freeze::long_option =>
             {
                 configuration.freeze = true;
+            },
+
+            Options::FreezeInterval::short_option | Options::FreezeInterval::long_option =>
+            {
+                // Validate size
+                if opt_index+Options::FreezeInterval::params.len() >= command_list.len()
+                {
+                    eprintln!("Missing parameter");
+                    return Err(CommandParsingError::MissingParameter);
+                }
+
+                let freeze_interval_r = command_list[opt_index+1].parse::<usize>();
+
+                if freeze_interval_r.is_err()
+                {
+                    eprintln!("Invalid freeze interval: {}", command_list[opt_index+1]);
+                    return Err(CommandParsingError::InvalidFreezeInterval);
+                }
+
+                configuration.freeze_interval_ms = freeze_interval_r.unwrap();
+                opt_index += Options::FreezeInterval::params.len(); // Jumps the input param
             },
 
             Options::WriteAbsAddr::short_option | Options::WriteAbsAddr::long_option =>
@@ -685,14 +793,9 @@ mod tests
     #[test]
     fn CLITest_Action_Exit()
     {
-        // Default
         assert_eq!(
-            argument_parsing("help".to_string()).unwrap().exit,
-            false);
-
-        assert_eq!(
-            argument_parsing("exit".to_string()).unwrap().exit,
-            true);
+            argument_parsing("exit".to_string()).unwrap().action,
+            ActionsEnum::Exit);
     }
 
     #[test]
@@ -710,6 +813,14 @@ mod tests
         let parsing_result = argument_parsing("search".to_string());
 
         assert_eq!(parsing_result, Err(CommandParsingError::NotEnoughOperations));
+    }
+
+    #[test]
+    fn CLITest_Action_Display()
+    {
+        assert_eq!(
+            argument_parsing("display".to_string()).unwrap().action,
+            ActionsEnum::Display);
     }
 
     #[test]
@@ -1014,6 +1125,64 @@ mod tests
     }
 
     #[test]
+    fn CLITest_Option_PagePermissionsAtLeast()
+    {
+        // Default
+        assert_eq!(
+            argument_parsing("search -to == 10".to_string()).unwrap().page_permissions_at_least,
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 -pal read".to_string()).unwrap().page_permissions_at_least,
+            GenericOSInterface::PageProtection_Read);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --page-perms-at-least read|execute".to_string()).unwrap().page_permissions_at_least,
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Execute);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 -pal read|write|execute".to_string()).unwrap().page_permissions_at_least,
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write|GenericOSInterface::PageProtection_Execute);
+    }
+
+    #[test]
+    fn CLITest_Option_PagePermissionsAtLeastFail()
+    {
+        assert_eq!(
+            argument_parsing("search -to == 10 -pal read|not-a-permission".to_string()),
+            Err(CommandParsingError::InvalidPagePermission));
+    }
+
+    #[test]
+    fn CLITest_Option_PagePermissionsExact()
+    {
+        // Default
+        assert_eq!(
+            argument_parsing("search -to == 10".to_string()).unwrap().page_permissions_exact,
+            None);
+
+        assert_eq!(
+            argument_parsing("search -to == 10 -pe read".to_string()).unwrap().page_permissions_exact,
+            Some(GenericOSInterface::PageProtection_Read));
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --page-perms-exact read|write".to_string()).unwrap().page_permissions_exact,
+            Some(GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write));
+
+        assert_eq!(
+            argument_parsing("search -to == 10 --page-perms-exact execute|read|write".to_string()).unwrap().page_permissions_exact,
+            Some(GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write|GenericOSInterface::PageProtection_Execute));
+    }
+
+    #[test]
+    fn CLITest_Option_PagePermissionsExactFail()
+    {
+        assert_eq!(
+            argument_parsing("search -to == 10 -pe not-a-permission".to_string()),
+            Err(CommandParsingError::InvalidPagePermission));
+    }
+
+    #[test]
     fn CLITest_Option_DisplayStyle()
     {
         // Default
@@ -1091,6 +1260,31 @@ mod tests
         assert_eq!(
             argument_parsing("write -aa 1000 -t 10 --freeze".to_string()).unwrap().freeze,
             true);
+    }
+
+    #[test]
+    fn CLITest_Option_FreezeInterval()
+    {
+        // Default
+        assert_eq!(
+            argument_parsing("write -aa 1000 -t 10".to_string()).unwrap().freeze_interval_ms,
+            1000);
+
+        assert_eq!(
+            argument_parsing("write -aa 1000 -t 10 -fzi 999".to_string()).unwrap().freeze_interval_ms,
+            999);
+
+        assert_eq!(
+            argument_parsing("write -aa 1000 -t 10 --freeze-interval 999".to_string()).unwrap().freeze_interval_ms,
+            999);
+    }
+
+    #[test]
+    fn CLITest_Option_FreezeIntervalFail()
+    {
+        assert_eq!(
+            argument_parsing("write -aa 1000 -t 10 -fzi aaa".to_string()),
+            Err(CommandParsingError::InvalidFreezeInterval));
     }
 
     #[test]
