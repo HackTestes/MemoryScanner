@@ -662,7 +662,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let freeze_interval_r = command_list[opt_index+1].parse::<usize>();
+                let freeze_interval_r = command_list[opt_index+1].parse::<u64>();
 
                 if freeze_interval_r.is_err()
                 {

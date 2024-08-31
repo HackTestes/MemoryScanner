@@ -45,7 +45,7 @@ pub struct Config
     pub remove_all_saved_entries: bool,
     pub restore_entry: Option<usize>,
     pub freeze: bool,
-    pub freeze_interval_ms: usize,
+    pub freeze_interval_ms: u64,
     pub write_abs_addr: Option<usize>
 }
 
