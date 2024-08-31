@@ -388,7 +388,7 @@ fn main()
     let args: Vec<String> = env::args().collect();
 
     // Does the user need help?
-    if &args[1] == "--help" && &args[1] == "--help"
+    if &args[1] == "--help" || &args[1] == "-h"
     {
         println!("HELP PLACEHOLDER");
         return;
