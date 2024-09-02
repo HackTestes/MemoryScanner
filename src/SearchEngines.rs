@@ -201,6 +201,12 @@ macro_rules! ComparatorFilter
                     // Store the match
                     // We simply store the original value, since it already represents the address relative to the memory regiion
                     match_addresses.push(prev_match.clone());
+
+                    // DEBUG ONLY
+                    //println!("FOUND SOMETHING");
+                    //println!("Buffer: {:?}", mem_region_slice_view);
+                    //println!("slice_relative_prev_match: {}", slice_relative_prev_match);
+                    //println!("prev_match: {}\n", prev_match);
                 }
             }
             return match_addresses;

@@ -118,7 +118,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
 // Ajust pages
 // The idea is to modify page information to account for the min, max and target type, so we can reuse most of the code from other places
 // This is also important, because it allows me to fit more regions into a buffer and use less memory (it also reduces the amount of synchronization calls)
-fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_type_size_bytes: usize) -> Result<Vec<GenericOSInterface::GenericMemoryRegion>, SearchErrors>
+pub fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_type_size_bytes: usize) -> Result<Vec<GenericOSInterface::GenericMemoryRegion>, SearchErrors>
 {
     let mut ajusted_mem_regions: Vec<GenericOSInterface::GenericMemoryRegion> = vec![];
 
@@ -184,7 +184,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     
     // DEBUG ONLY
     //println!("Previous results: {:#?}", previous_results.iter().map(|x| return(x.mem_region.clone(), x.matches.len())).collect::<Vec<(_, _)>>());
-    //println!("Page original: {:#?} \nPage ajusted: {:#?}", previous_results[0], memory_regions[0]);
+    //println!("Original page: {:#?} \nAjusted page: {:#?}", previous_results[0], memory_regions[0]);
 
     let original_memory_regions: Vec<GenericOSInterface::GenericMemoryRegion> = previous_results.iter().map(|x| x.mem_region.clone()).collect();
 
@@ -243,6 +243,9 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
         let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view_filter(num_threads, &arc_previous_results[start_copy_position..(start_copy_position+copies_done)]);
 
+        // DENUG ONLY
+        //println!("Threads workload: {:#?}", thread_workload);
+
         // Perform the search in parallel
 
         // Make the buffer shareable
@@ -274,9 +277,6 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
 
     return Ok(search_results);
 }
-
-
-
 
 #[cfg(test)]
 mod tests

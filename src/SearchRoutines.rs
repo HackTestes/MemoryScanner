@@ -149,20 +149,26 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                 {
                     let start = region_workload.0;
                     let buff_start = current_buffer_pos;
+                    //let buff_start = start + current_buffer_pos;
 
                     let end = region_workload.1;
-                    let buff_end = regions[region_idx].size_bytes + current_buffer_pos;
+                    let buff_end = regions[region_idx].size_bytes + buff_start;
+                    //let buff_end = end + current_buffer_pos;
 
                     // DEBUG ONLY
                     //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
-                    println!("Current region: {:?}", regions[region_idx]);
-                    println!("Current task: {:?}", region_workload);
-                    println!("Matches: {:#?}", previous_matches[region_idx].matches);
-                    println!("Start and end buffer: {:?}", (buff_start, buff_end));
+                    //println!("Current region: {:?}", regions[region_idx]);
+                    //println!("Current buffer total size: {:?}", arc_buffer.len());
+                    //println!("Current task: {:?}", region_workload);
+                    //println!("Start and end: {:?}", (start, end));
+                    //println!("Start and end buffer: {:?}", (buff_start, buff_end));
+                    //println!("Start match value: {}", previous_matches[region_idx].matches[0]);
+                    //println!("Matches: {:?}", previous_matches[region_idx].matches);
+                    //println!("\n\n");
 
                     thread_results.push(t_task(
                         &arc_buffer[buff_start..buff_end], // Filter operations have access to the whole buffer, relative to that region
-                        previous_matches[region_idx].matches[start], // Since we ajust the pages, we need to also ajust the match value to the new memory (otherwise we can an access out of bounds)
+                        previous_matches[region_idx].matches[0], // Since we ajust the pages, we need to also ajust the match value to the new memory (otherwise we can an access out of bounds)
                         &operations,
                         result_buffer_size,
                         &previous_matches[region_idx].matches[start..end])); // We now limit which matches the thread can read for each region
@@ -187,8 +193,10 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
 mod tests
 {
     use crate::SearchRoutines::*;
+    use crate::SearchGlue::*;
     use crate::GenericOSInterface::*;
     use crate::WorkloadPartitioning::*;
+    use crate::Matches::*;
     use crate::ThreadPool;
     use crate::SearchEngines::*;
     use std::mem::size_of;
@@ -354,6 +362,80 @@ mod tests
         println!("Results from search: \n{:?}", all_results);
 
         let expected: Vec<Vec<Vec<usize>>> = vec![ vec![vec![]], vec![vec![499]], vec![vec![]], vec![vec![]] ];
+        assert_eq!(expected, all_results);
+    }
+
+    #[test]
+    fn TestStartPrallelFilterSearchRoutine_RegularCase_MultipleRegions()
+    {
+        let num_threads: usize = 4;
+        let buffer_size: usize = 1000;
+        let num_regions: usize = 4;
+        let thread_private_store_size: usize = 1000;
+        
+        // Create what would be the representation of the memory in the process
+        let mut buffer = vec![0; buffer_size*num_regions];
+        buffer[36] = 1;
+        println!("Needle look: {:?}", u32::to_ne_bytes(1));
+        let arc_buffer: Arc<Vec<u8>> = Arc::new(buffer);
+        
+        // Create the memory regions, which need to correspond to the copy buffer
+        let memory_regions = vec![
+            GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 0, buffer_size),
+            GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 1000, buffer_size),
+            GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 2000, buffer_size),
+            GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 3000, buffer_size)
+            ];
+
+        let previous_matches: Arc<Vec<AddressMatches>> = Arc::new(vec![
+            AddressMatches::new(memory_regions[0].clone(), vec![960, 996]), // 0 - 40
+            AddressMatches::new(memory_regions[1].clone(), vec![800]), // 40 - 44
+            AddressMatches::new(memory_regions[2].clone(), vec![500]), // 44 - 48
+            AddressMatches::new(memory_regions[2].clone(), vec![700]) // 48 - 52
+            ]);
+
+        let ajusted_pages = ajust_pages_min_max(&previous_matches, size_of::<u32>()).unwrap();
+
+            // Calculate the workload for each thread
+        let mut thread_workload = partition_thread_workload_equal_slice_view_filter(num_threads, &previous_matches);
+
+        println!("Workload: {:?}", thread_workload);
+        println!("Original regions \n-------\n{:#?}", memory_regions);
+        println!("Ajusted regions \n-------\n{:#?}", ajusted_pages);
+
+        let mut thread_pool = ThreadPool::ThreadPool::<
+            (Vec<(usize, usize)>,
+            Arc<Vec<u8>>,
+            usize,
+            Vec<(SearchEngines::ComparisonOperation, u32)>,
+            fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u32)], usize, &[usize]) -> Vec<usize>,
+            Vec<GenericOSInterface::GenericMemoryRegion>,
+            Arc<Vec<Matches::AddressMatches>>),
+            Vec<Vec<usize>>
+        >::new(num_threads).unwrap();
+
+        let operations: Vec<(SearchEngines::ComparisonOperation, u32)> = vec![(ComparisonOperation::Equal, 1)];
+
+        let timer = time::Instant::now();
+
+        let all_results = FilterParallelSearchLinearComparator(
+            &previous_matches,
+            &arc_buffer,
+            &mut thread_workload,
+            &operations,
+            &ajusted_pages,
+            thread_private_store_size,
+            &mut thread_pool,
+            LinearSearch_ComparatorFilter_u32
+        );
+
+        let elapsed = timer.elapsed();
+
+        println!("Search took: \n{}s\n{}ms\n{}us", elapsed.as_secs(), elapsed.as_millis(), elapsed.as_micros());
+        println!("Throughput: \n{} bytes/ms \n{} GiB/s", buffer_size as f64/elapsed.as_millis() as f64, (buffer_size/(1024*1024*1024)) as f64 /elapsed.as_secs() as f64);
+        println!("Results from search: \n{:?}", all_results);
+
+        let expected: Vec<Vec<Vec<usize>>> = vec![ vec![vec![]], vec![vec![]], vec![vec![]], vec![vec![]] ];
         assert_eq!(expected, all_results);
     }
 }
