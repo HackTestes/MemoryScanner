@@ -2,9 +2,12 @@
 // rustc path_to_program
 
 use std::io;
+use std::process;
 
 fn main()
 {
+    println!("PID: {}", process::id());
+
     let mut num: u32 = 0;
     let mut vector: Vec<u8> = vec![0; 1024];
     let vector_len: usize = vector.len();
