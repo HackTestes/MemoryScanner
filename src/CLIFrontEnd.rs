@@ -72,7 +72,7 @@ mod Options
     {
         pub const short_option: &str = "-ty";
         pub const long_option: &str = "--target-type";
-        pub const description: &str = "Controls the data type of the target. Valid types: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64";
+        pub const description: &str = "Controls the data type of the target. Uses u8 by default. Valid types: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64";
         pub const params: &[&str] = &["<TARGET_TYPE>"];
     }
 
@@ -244,6 +244,50 @@ mod Actions
     }
 }
 
+pub fn print_CLI_help()
+{
+    let mut output: String = String::new();
+
+    output.push_str("HELP OUPTPUT \n\tHere is how you can enter commands during the program's execution");
+
+    output.push_str("\n\n");
+
+    output.push_str("USAGE \n\tACTION [OPTIONS...]");
+
+    output.push_str("\n\n");
+
+    output.push_str("ACTIONS\n");
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Help::text, Actions::Help::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Exit::text, Actions::Exit::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Search::text, Actions::Search::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Write::text, Actions::Write::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Display::text, Actions::Display::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Save::text, Actions::Save::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Restore::text, Actions::Restore::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Remove::text, Actions::Remove::description).as_str());
+
+    output.push_str("OPTIONS\n");
+    output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::Help::long_option, Options::Help::short_option, Options::Help::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::ThreadStorage::long_option, Options::ThreadStorage::short_option, Options::ThreadStorage::params.join(" "), Options::ThreadStorage::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::CopyBufferSize::long_option, Options::CopyBufferSize::short_option, Options::CopyBufferSize::params.join(" "), Options::CopyBufferSize::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::TargetType::long_option, Options::TargetType::short_option, Options::TargetType::params.join(" "), Options::TargetType::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::TargetValue::long_option, Options::TargetValue::short_option, Options::TargetValue::params.join(" "), Options::TargetValue::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::TargetOperations::long_option, Options::TargetOperations::short_option, Options::TargetOperations::params.join(" "), Options::TargetOperations::description).as_str());
+    output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::Filter::long_option, Options::Filter::short_option, Options::Filter::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::Engine::long_option, Options::Engine::short_option, Options::Engine::params.join(" "), Options::Engine::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::PagePermissionsAtLeast::long_option, Options::PagePermissionsAtLeast::short_option, Options::PagePermissionsAtLeast::params.join(" "), Options::PagePermissionsAtLeast::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::PagePermissionsExact::long_option, Options::PagePermissionsExact::short_option, Options::PagePermissionsExact::params.join(" "), Options::PagePermissionsExact::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::DisplayStyle::long_option, Options::DisplayStyle::short_option, Options::DisplayStyle::params.join(" "), Options::DisplayStyle::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::RestoreSpecificEntry::long_option, Options::RestoreSpecificEntry::short_option, Options::RestoreSpecificEntry::params.join(" "), Options::RestoreSpecificEntry::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Options::RemoveAllEntries::long_option, Options::RemoveAllEntries::description).as_str());
+    output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::Freeze::long_option, Options::Freeze::short_option, Options::Freeze::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::FreezeInterval::long_option, Options::FreezeInterval::short_option, Options::FreezeInterval::params.join(" "), Options::FreezeInterval::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::WriteAbsAddr::long_option, Options::WriteAbsAddr::short_option, Options::WriteAbsAddr::params.join(" "), Options::WriteAbsAddr::description).as_str());
+
+
+    println!("{}", output);
+}
+
 fn is_the_value_valid_for_type(target_string: &str, target_type: &TargetType) -> bool
 {
     // We do the verification based on the configured target type
@@ -319,7 +363,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     // If we have the help action, we don't need to validate anything else
     if configuration.action == ActionsEnum::Help
     {
-        println!("HELP PLACEHOLDER");
+        print_CLI_help();
         configuration.help = true;
         return Ok(configuration);
     }
@@ -336,7 +380,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
         {
             Options::Help::short_option | Options::Help::long_option =>
             {
-                println!("HELP PLACEHOLDER");
+                print_CLI_help();
                 configuration.help = true;
 
                 // Early break, help doesn't need anything else

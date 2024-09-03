@@ -379,6 +379,12 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
     return search_results;
 }
 
+fn main_help()
+{
+    println!("USAGE \n\tMemoryScanner [-h|--help] OR MemoryScanner <TARGET_PID>\n\n");
+    CLIFrontEnd::print_CLI_help();
+}
+
 fn main()
 {
     // Get the arguments from command line
@@ -388,7 +394,7 @@ fn main()
     // Does the user need help?
     if &args[1] == "--help" || &args[1] == "-h"
     {
-        println!("HELP PLACEHOLDERr");
+        main_help();
         return;
     }
 
@@ -401,7 +407,8 @@ fn main()
 
     let process_id: u64 = if process_id_r.is_ok(){process_id_r.unwrap()} else
     {
-        eprintln!("The process ID given is nor valid");
+        eprintln!("The process ID given is not valid");
+        main_help();
         return;
     };
 
