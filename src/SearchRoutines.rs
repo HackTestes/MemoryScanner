@@ -168,7 +168,14 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
 
                     thread_results.push(t_task(
                         &arc_buffer[buff_start..buff_end], // Filter operations have access to the whole buffer, relative to that region
-                        previous_matches[region_idx].matches[0], // Since we ajust the pages, we need to also ajust the match value to the new memory (otherwise we can an access out of bounds)
+
+                        // Since we ajust the pages, we need to also ajust the match value to the new memory (otherwise we can an access out of bounds)
+                        // It is also important to mention that we need to use the GLOBAL first match, since the page ajustment only takes in consideration the first and last global matches address (and don't ajust the matches itself)
+                        // Failling to do so will cause threads to ajust to their private workloads and consequently misalign the addresses of the search
+                        // If you ignore this, you are considering that each thread uses a slice that corresponds to its search matches and that the first position also corresponds to the first match position
+                        // However, the assumption here is that the filter operation can access the whole section and only select what it wants from the matches
+                        // One symptom is that the filtering removes valid addresses based on the number of threads (even if the process is stopped): T2 -> m/2; T4 -> m/4; T8 -> m/8
+                        previous_matches[region_idx].matches[0],
                         &operations,
                         result_buffer_size,
                         &previous_matches[region_idx].matches[start..end])); // We now limit which matches the thread can read for each region
