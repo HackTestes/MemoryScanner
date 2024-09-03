@@ -120,6 +120,12 @@ So, due to increased complexity, this mode will not be supported.
         * Goal: memory allocations can be slow
         * How: remove buffer cloning where possible in the codebase
 
+* Stability and corectness
+
+    * [ ] Add more unit tests
+        * Goal: Detect the behaviour of misaligned filter searches (the global match page ajustment)
+        * How: Yet to be investigated
+
 * Features
 
     * [ ] Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
