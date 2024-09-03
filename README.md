@@ -85,34 +85,33 @@ So, due to increased complexity, this mode will not be supported.
 
 * Just refactoring work! It's fully working now!
 
-    * [ ] Change config field "value_to_search" to "value"
+* [x] Implementation for a thread pool (performance optimization)
 
-    * [ ] Implementation for a thread pool (performance optimization)
-
-    * [ ] Find a way to reuse search functions (start and filter)
+* [x] Find a way to reuse search functions (start and filter)
 
 * Refactoring
 
-    * [ ] Update argument parsing
+    * [x] Update argument parsing
         * Goal: improve readability, because the current code looks terrible (it was an experiment at different ways of doing argument parsing)
         * How: get rid of the hash map, get rid of actions, use match or if-else and make a arguments struct that holds everything (it should help that only 1 struct holds all of the data insted of multiple places)
 
-    * [ ] Refactor parallel search 
+    * [x] Refactor parallel search 
         * Goal: make the algorithm simplier
         * Current situation: I made some bad decisions on the algorithm (making it hard and unreadable tbh), but I have since refined it
         * How: update the docs first and then updatae the code
 
-    * [ ] Make the parallel search code a routine, to improve on testing and improve readability of the Glue code
+    * [x] Make the parallel search code a routine, to improve on testing and improve readability of the Glue code
+
 * Performance optimization
 
-    * [ ] Use threads pools in the search
+    * [x] Use threads pools in the search
         * Goal: avoid the costs associated to thread creation at every region search (it currently creates threads at every new region)
 
     * [ ] Use vectorized instructions for searching
         * Goal: improve the speed of the search hot path
-        * How: Rust's regex engine uses such instructions, so I will use the binary search version
+        * How: Rust's regex engine uses such instructions, so I will use the binary search version (https://github.com/BurntSushi/memchr)
 
-    * [ ] Run the same code for multiple regions
+    * [x] Run the same code for multiple regions
         * Goal: better exploit the code cache in CPUs to improve speed
         * How: store multiple regions in a single structure that keeps track of the memory used (size), so the search code will be reutilized withut calling OS APIs and will make it reside in CPUs cache
         * Sub-goal: make the regions contiguous in memory, allow both the code and data caches to be better exploited
@@ -121,11 +120,18 @@ So, due to increased complexity, this mode will not be supported.
         * Goal: memory allocations can be slow
         * How: remove buffer cloning where possible in the codebase
 
+* Features
+
+    * [ ] Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
+        * Goal: Allow the search to discard pages that can't be read, essentially ignoring errors. In my experimentation, some pages return errors despite everything being correct, so I don't want them to stop the whole search process
+        * How: During the copy of pages, report the pages that returned errors and update the golbal pages list
+        * Current workaround: insted of reporting a failure, I fill the buffer with zeros. This approach, however, wastes RAM and CPU power on useless searches, also having the potential to cause false matches when looking for 0.
+
 * Modules
     * [x] Test moving closure API for thread pool
         * Attention: for some reason, the closure implementation is slightly slower due to dyn and Box 
 
-* Platforms
+* Platform support
 
     * [ ] Add linux support
         * Security: investigate how to work under [YAMA LSM](https://www.kernel.org/doc/html/v4.15/admin-guide/LSM/Yama.html) without disabling it
