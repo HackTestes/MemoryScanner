@@ -213,6 +213,11 @@ pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_addres
     }
 
     // It was a success, so write into the buffer to simulate a read
+    // The goal is to create a pattern like this, so each region is unique at the start and end
+    // 0 - 100: 0, 1, 2, 3...99
+    // 100 - 200: 1, 2, 3, 4...100
+    // 200 - 300: 2, 3, 4, 5...101
+    // It means that by simply looking at the buffers values, we can identify the region
     for i in 0..buffer.len()
     {
         // u8 might lose some bits of the original value,
