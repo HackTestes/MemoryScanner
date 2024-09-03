@@ -435,7 +435,41 @@ mod tests
         println!("Throughput: \n{} bytes/ms \n{} GiB/s", buffer_size as f64/elapsed.as_millis() as f64, (buffer_size/(1024*1024*1024)) as f64 /elapsed.as_secs() as f64);
         println!("Results from search: \n{:?}", all_results);
 
-        let expected: Vec<Vec<Vec<usize>>> = vec![ vec![vec![]], vec![vec![]], vec![vec![]], vec![vec![]] ];
+        let expected: Vec<Vec<Vec<usize>>> = vec![
+
+            // Thread 0
+            vec![
+                vec![], // Region 0
+                vec![], // Region 1
+                vec![], // Region 2
+                vec![] // Region 3
+            ],
+
+            // Thread 1
+            vec![
+                vec![996], // Region 0
+                vec![], // Region 1
+                vec![], // Region 2
+                vec![] // Region 3
+            ],
+
+            // Thread 2
+            vec![
+                vec![], // Region 0
+                vec![], // Region 1
+                vec![], // Region 2
+                vec![] // Region 3
+            ],
+
+            // Thread 3
+            vec![
+                vec![], // Region 0
+                vec![], // Region 1
+                vec![], // Region 2
+                vec![] // Region 3
+            ],
+        ];
+    
         assert_eq!(expected, all_results);
     }
 }
