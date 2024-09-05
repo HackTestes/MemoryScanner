@@ -299,6 +299,12 @@ impl GenericProcess
                 copies_done += 1;
                 space_used += region.size_bytes;
             }
+
+            // The page goes out of range, no need to continue the loop
+            else
+            {
+                break;
+            }
         }
 
         // Check for regions too big that no copy was done
@@ -306,6 +312,13 @@ impl GenericProcess
         {
             return Err(GenericOSErrors::SnapshotBufferIsTooSmall);
         }
+
+        // DEGUG ONLY
+        //println!("Snapshot");
+        //println!("Copies done: {}", copies_done);
+        //println!("Space used / max size: {} / {}", space_used, max_space);
+        //println!("Regions copied: {:#?}", target_mem_regions[..copies_done].to_vec());
+        //println!("\n\n");
 
         return Ok(copies_done);
     }
