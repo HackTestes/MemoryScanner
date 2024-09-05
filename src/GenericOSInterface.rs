@@ -314,11 +314,14 @@ impl GenericProcess
         }
 
         // DEGUG ONLY
-        //println!("Snapshot");
-        //println!("Copies done: {}", copies_done);
-        //println!("Space used / max size: {} / {}", space_used, max_space);
-        //println!("Regions copied: {:#?}", target_mem_regions[..copies_done].to_vec());
-        //println!("\n\n");
+        #[cfg(debug_print = "GOSI_snapshot_bounded")]
+        {
+            println!("Snapshot");
+            println!("Copies done: {}", copies_done);
+            println!("Space used / max size: {} / {}", space_used, max_space);
+            println!("Regions copied: {:#?}", target_mem_regions[..copies_done].to_vec());
+            println!("\n\n");
+        }
 
         return Ok(copies_done);
     }

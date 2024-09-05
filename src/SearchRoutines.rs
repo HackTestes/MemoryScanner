@@ -68,11 +68,27 @@ pub fn StartParallelSearchLinearComparator<T: Send + 'static + Clone>(
                 let end = region_workload.1;
                 let buff_end = end + current_buffer_pos;
 
-                // DEBUG ONLY
-                // Use it only for debugging searched regions
-                //println!("Region relative:({}, {})", start, end);
-                //println!("Buffer: ({}, {})", buff_start, buff_end);
-                //println!("{:?}", arc_buffer);
+                // Check for mismatched workloads and pages
+                // TODO? Ajust for different number of threads
+                /*let slice_size = (buff_end-buff_start);
+                if slice_size != regions[region_idx].size_bytes
+                {
+                    panic!("Thread workload slice doesn't match with the page");
+                }
+                */
+
+                // DEBUG ONLY: $env:RUSTFLAGS='--cfg debug_print="StartParallelSearchLinearComparator"'
+                #[cfg(debug_print = "StartParallelSearchLinearComparator")]
+                {
+                    println!("Current region: {:?}", regions[region_idx]);
+                    println!("Current buffer total size: {:?}", arc_buffer.len());
+                    println!("Current task: {:?}", region_workload);
+                    println!("Start and end: {:?}", (start, end));
+                    println!("Start and end buffer: {:?}", (buff_start, buff_end));
+                    println!("Start and end buffer slice size: {}", buff_end-buff_start);
+                    println!("Start match value: {}", start);
+                    println!("\n\n");
+                }
 
                 thread_results.push(t_task(
                     &arc_buffer[buff_start..buff_end], // The thread can only read its private segment
@@ -155,16 +171,19 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                     let buff_end = regions[region_idx].size_bytes + buff_start;
                     //let buff_end = end + current_buffer_pos;
 
-                    // DEBUG ONLY
-                    //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
-                    //println!("Current region: {:?}", regions[region_idx]);
-                    //println!("Current buffer total size: {:?}", arc_buffer.len());
-                    //println!("Current task: {:?}", region_workload);
-                    //println!("Start and end: {:?}", (start, end));
-                    //println!("Start and end buffer: {:?}", (buff_start, buff_end));
-                    //println!("Start match value: {}", previous_matches[region_idx].matches[0]);
-                    //println!("Matches: {:?}", previous_matches[region_idx].matches);
-                    //println!("\n\n");
+                    // DEBUG ONLY: $env:RUSTFLAGS='--cfg debug_print="StartParallelSearchLinearComparator"'
+                    #[cfg(debug_print = "FilterParallelSearchLinearComparator")]
+                    {
+                        //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
+                        println!("Current region: {:?}", regions[region_idx]);
+                        println!("Current buffer total size: {:?}", arc_buffer.len());
+                        println!("Current task: {:?}", region_workload);
+                        println!("Start and end: {:?}", (start, end));
+                        println!("Start and end buffer: {:?}", (buff_start, buff_end));
+                        println!("Start match value: {}", previous_matches[region_idx].matches[0]);
+                        println!("Matches: {:?}", previous_matches[region_idx].matches);
+                        println!("\n\n");
+                    }
 
                     thread_results.push(t_task(
                         &arc_buffer[buff_start..buff_end], // Filter operations have access to the whole buffer, relative to that region

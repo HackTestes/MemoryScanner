@@ -91,6 +91,10 @@ $env:RUSTFLAGS='--cfg flag_name="flag value"'
 
 OR
 
+$env:RUSTFLAGS='--cfg flag_name="flag value" --cfg flag_name="flag value 02"'
+
+OR
+
 $env:RUSTFLAGS='--cfg flag_name'
 ```
 
