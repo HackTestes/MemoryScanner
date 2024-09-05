@@ -81,6 +81,24 @@ So, due to increased complexity, this mode will not be supported.
 - Minimal memory footprint
 - Single executable
 
+## Debugging
+
+### Set up debug printing information
+
+Select rust flags (Windows). The falgs are only valid for that terminal session
+```
+$env:RUSTFLAGS='--cfg flag_name="flag value"'
+
+OR
+
+$env:RUSTFLAGS='--cfg flag_name'
+```
+
+Then you just need to build and run
+```
+cargo build [--release]
+```
+
 ## Roadmap
 
 * Just refactoring work! It's fully working now!
@@ -152,3 +170,8 @@ So, due to increased complexity, this mode will not be supported.
 
             * Alternative: BPF LSM
                 * Setup a rule that checks ptrace target name (process name)
+
+* Known bugs
+
+    * [ ] Small buffers cause an out of bounds access
+        * Tests to reproduce: Use a non-contiguous victim process and as for a buffer smaller than the total sum of the non-contiguous segments
