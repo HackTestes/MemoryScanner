@@ -53,34 +53,34 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
     // Create the thread pool
     // It must be created here so the search operation can reuse it throughout the entire search
     let thread_pool_r = ThreadPool::ThreadPool::< (Vec<(usize, usize)>,
-                                                    Arc<Vec<u8>>,
-                                                    usize,
-                                                    Vec<(SearchEngines::ComparisonOperation, T)>,
-                                                    fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize) -> Vec<usize>,
-                                                    Vec<GenericOSInterface::GenericMemoryRegion>),
-                                                    Vec<Vec<usize>> >::new(num_threads);
-
+    Arc<Vec<u8>>,
+    usize,
+    Vec<(SearchEngines::ComparisonOperation, T)>,
+    fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize) -> Vec<usize>,
+    Vec<GenericOSInterface::GenericMemoryRegion>),
+    Vec<Vec<usize>> >::new(num_threads);
+    
     let mut thread_pool = match thread_pool_r
     {
         Ok(pool) => pool,
         Err(error) => return Err(SearchErrors::ThreadPoolErrors(error))
     };
-
+    
     // Loops over the the copy operations needed
     for start_copy_position in snapshot_workload
     {
         // Create a snapshot of the process (copy it to the buffer)
         let snapshot_result = process_handle.snapshot_bounded(&memory_regions[(start_copy_position)..], &mut copy_buffer[0..]);
-
+        
         // Check for errors
         let copies_done = match snapshot_result
         {
             Ok(num_copies) => num_copies,
-
+            
             // If there is any error, return immediately
             Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
         };
-
+        
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
         let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions[start_copy_position..(start_copy_position+copies_done)], size_of::<T>());
 
@@ -92,7 +92,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
-            &memory_regions,
+            &memory_regions[start_copy_position..(start_copy_position+copies_done)].to_vec(), // Use only the regions that were actually copied
             thread_private_store_size,
             &mut thread_pool,
             thread_task
@@ -257,7 +257,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
-            &memory_regions,
+            &memory_regions[start_copy_position..(start_copy_position+copies_done)].to_vec(), // Use only the regions that were actually copied
             thread_private_store_size,
             &mut thread_pool,
             thread_task
