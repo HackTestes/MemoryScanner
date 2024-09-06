@@ -14,7 +14,7 @@ pub fn StartParallelSearchLinearComparator<T: Send + 'static + Clone>(
     arc_copy_buffer: &Arc<Vec<u8>>,
     thread_workload: &mut Vec< Vec<(usize, usize)> >,
     operations: &Vec<(SearchEngines::ComparisonOperation, T)>,
-    memory_regions: &Vec<GenericOSInterface::GenericMemoryRegion>,
+    memory_regions: &[GenericOSInterface::GenericMemoryRegion],
     thread_private_store_size: usize,
     thread_pool: &mut ThreadPool::ThreadPool<
         (
@@ -41,7 +41,7 @@ pub fn StartParallelSearchLinearComparator<T: Send + 'static + Clone>(
             thread_private_store_size,
             operations.clone(),
             thread_task,
-            memory_regions.clone()),
+            memory_regions.to_vec()), // aka clone the slice
             |args| -> Vec< Vec<usize> >
         {
             // Unpack args
@@ -113,7 +113,7 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
     arc_copy_buffer: &Arc<Vec<u8>>,
     thread_workload: &mut Vec< Vec<(usize, usize)> >,
     operations: &Vec<(SearchEngines::ComparisonOperation, T)>,
-    memory_regions: &Vec<GenericOSInterface::GenericMemoryRegion>,
+    memory_regions: &[GenericOSInterface::GenericMemoryRegion],
     thread_private_store_size: usize,
     thread_pool: &mut ThreadPool::ThreadPool<
         (
@@ -139,7 +139,7 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                 thread_private_store_size,
                 operations.clone(),
                 thread_task,
-                memory_regions.clone(),
+                memory_regions.to_vec(), // aka clone the slice
                 arc_previous_results.clone()),
                 |args| -> Vec< Vec<usize> >
             {

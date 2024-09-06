@@ -92,7 +92,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
-            &memory_regions[start_copy_position..(start_copy_position+copies_done)].to_vec(), // Use only the regions that were actually copied
+            &memory_regions[start_copy_position..(start_copy_position+copies_done)], // Use only the regions that were actually copied
             thread_private_store_size,
             &mut thread_pool,
             thread_task
@@ -260,7 +260,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
-            &memory_regions[start_copy_position..(start_copy_position+copies_done)].to_vec(), // Use only the regions that were actually copied
+            &memory_regions[start_copy_position..(start_copy_position+copies_done)], // Use only the regions that were actually copied
             thread_private_store_size,
             &mut thread_pool,
             thread_task
