@@ -12,6 +12,7 @@ use std::os::raw::c_void;
 #[cfg(test)]
 pub type OSSpecificHandle = u64;
 
+// A default test image process, so not every test needs to define its own process
 #[cfg(test)]
 pub fn default_test_process_image() -> Vec<GenericOSInterface::FakeGenericMemoryRegion>
 {
@@ -70,9 +71,12 @@ pub fn get_process_handle(process_id: u64) -> Result<OSSpecificHandle, GenericOS
     return Ok(process_id);
 }
 
+// This just simulates a close handle action, but, since there is no process in tests, it does nothing
+// Well, it can simulate a failure
 #[cfg(test)]
 pub fn close_handle(handle: OSSpecificHandle) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
+    // It needs a handle that can be opened, otherwise we can't drop
     if handle == 0
     {
         return Ok(());
@@ -101,7 +105,7 @@ impl Iterator for MemoryRegionIterator
     fn next(&mut self) -> Option< Result<GenericOSInterface::GenericMemoryRegion, GenericOSInterface::GenericOSErrors> >
     {
         // Insert errors
-        // It needs a special instantiator function
+        // This is here just to help testing for fails
         if self.process_handle > 5
         {
             return Some( Err(GenericOSInterface::GenericOSErrors::GenericFail) );
@@ -113,6 +117,7 @@ impl Iterator for MemoryRegionIterator
             return None;
         }
 
+        // The index is valid if we get to this point, so you can simply reference the page and return a copy
         let region = Some( Ok(self.regions_copy[ self.current_region ].clone()) );
         self.current_region += 1;
 
@@ -128,6 +133,9 @@ pub fn iter_over_mem_regions(handle: OSSpecificHandle, process: &GenericOSInterf
     {
         process_handle: handle,
         current_region: 0,
+
+        // Copy the region pages into the iter struct, so it can be referenced
+        // Since the pages won't cahnge, it is safe to copy
         regions_copy : process.custom_image.iter().map(|x| return x.memory_region.clone()).collect::<Vec<_>>(),
     };
 }
