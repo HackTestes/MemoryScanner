@@ -948,4 +948,52 @@ mod tests
         assert_eq!(Err(GenericOSErrors::SnapshotBufferIsTooSmall), snapshot_workload);
     }
 
+    // Previous bug detection
+    #[test]
+    fn TestProcessSnapshot_Bug_SkipBigPages()
+    {
+        let mut buffer: Vec<u8> = vec![0; 500];
+
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 200, 500),
+                    vec![2; 500]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 100),
+                    vec![3; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 100),
+                    vec![4; 100]),
+            ]
+        );
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+
+        println!("Memory regions: {:?}", memory_regions);
+        println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+        // Did it succeed?
+        assert_eq!(snapshot_result, Ok(1));
+
+        // Was the buffer written?
+        let mut expect: Vec<u8> = vec![];
+        expect.append(&mut vec![1; 100]);
+        expect.append(&mut vec![0; 400]);
+
+        assert_eq!(buffer, expect);
+    }
+
 }
