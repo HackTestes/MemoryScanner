@@ -413,8 +413,13 @@ fn main()
     };
 
     // Now attach to the process and verify any errors
-    // Note: I am being lazy and using unwrap directly, but this is not user friendly at all
-    let mut process_handle: GenericOSInterface::GenericProcess = GenericOSInterface::GenericProcess::attach(process_id).unwrap();
+    let process_r = GenericOSInterface::GenericProcess::attach(process_id);
+
+    let mut process_handle: GenericOSInterface::GenericProcess = if process_r.is_ok(){process_r.unwrap()} else
+    {
+        eprintln!("It was not possible to attach to the process. Terminating");
+        return;
+    };
     println!("Process attached! PID: {}", process_id);
 
     // Now that the process was SUCCESSFULLY attached...
