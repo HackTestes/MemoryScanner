@@ -148,6 +148,26 @@ impl GenericMemoryRegion
     }
 }
 
+// A fake memory region for testing
+// This is just to be a name tuple
+#[cfg(test)]
+#[derive(Debug, PartialEq)]
+pub struct FakeGenericMemoryRegion
+{
+    pub memory_region: GenericMemoryRegion,
+    pub payload: Vec<u8> // This represents the actual memory contents of the region
+}
+
+#[cfg(test)]
+impl FakeGenericMemoryRegion
+{
+    // This allows me to do some input validtion if I want to
+    pub fn new(mem_region: GenericMemoryRegion, payload: Vec<u8>) -> Self
+    {
+        return FakeGenericMemoryRegion{ memory_region: mem_region, payload: payload };
+    }
+}
+
 
 // It represents a single ATTACHED process
 // Attaching early is important to avoid process ID race conditions
@@ -159,9 +179,14 @@ impl GenericMemoryRegion
 // A handle would avoid this problem entirely
 // Note: handles should not be cloned as they can get out of sync (and one the clone might close the handle while others are using it)
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub struct GenericProcess
 {
-    handle: OSInterface::OSSpecificHandle
+    handle: OSInterface::OSSpecificHandle,
+
+    // An attribute to hold the custom test image from  the create method
+    #[cfg(test)]
+    pub custom_image: Vec< FakeGenericMemoryRegion >,
 }
 
 // Closes the handle, otherwise we will have a memory leak with the descriptors
@@ -188,7 +213,19 @@ impl GenericProcess
             Err(error) => return Err(error)
         };
 
+        #[cfg(test)]
+        return Ok(GenericProcess{handle: handle, custom_image: OSInterface::default_test_process_image()});
+
+        #[cfg(not(test))]
         return Ok(GenericProcess{handle: handle});
+    }
+
+    // A function that can only be used during tests
+    // The goal of such function is to be able to create a custom fake process for each test, allowing me to test different patterns
+    #[cfg(test)]
+    pub fn create(process_id: u64, custom_image_input: Vec< FakeGenericMemoryRegion >) -> Self
+    {
+        return GenericProcess{handle: process_id, custom_image: custom_image_input};
     }
 
     // It also returns with pages info, nut it allows the caller to filter some desired proporties
@@ -199,7 +236,7 @@ impl GenericProcess
         // Store memory regions
         let mut memory_regions: Vec<GenericMemoryRegion> = vec![];
 
-        for generic_memory_region_result in OSInterface::iter_over_mem_regions(self.handle)
+        for generic_memory_region_result in OSInterface::iter_over_mem_regions(self.handle, self)
         {
             // Check for errors
             let generic_memory_region = match generic_memory_region_result
@@ -247,7 +284,7 @@ impl GenericProcess
     pub fn write_into_vm(&self, buffer: &[u8], absolute_vm_address: usize) -> Result<(), GenericOSErrors>
     {
         // The OSInterface function is responsible for understanding how to use the handle
-        let result = OSInterface::write_into_process_vm(self.handle, buffer, absolute_vm_address);
+        let result = OSInterface::write_into_process_vm(self.handle, buffer, absolute_vm_address, self);
 
         match result
         {
@@ -262,7 +299,7 @@ impl GenericProcess
     pub fn read_from_vm(&self, absolute_vm_address: usize, buffer: &mut [u8]) -> Result<(), GenericOSErrors>
     {
         // The OSInterface function is responsible for understanding how to use the handle
-        let result = OSInterface::read_from_process_vm(self.handle, absolute_vm_address, buffer);
+        let result = OSInterface::read_from_process_vm(self.handle, absolute_vm_address, buffer, self);
 
         match result
         {
@@ -402,7 +439,7 @@ mod tests
         println!("{:?}", result);
 
         // Does it return a handle?
-        assert!( matches!( result, Ok(GenericProcess { handle: 1 }) ) );
+        assert_eq!( result, Ok(GenericProcess { handle: 1 , custom_image: OSInterface::default_test_process_image()}) );
     }
 
     // Does the attach method check for errors and return the handle on success?
@@ -464,17 +501,27 @@ mod tests
         // Start a zeroed buffer of 100 items
         let mut buffer: Vec<u8> = vec![0; 100];
 
-        let process = GenericProcess::attach(1).unwrap();
+        //let process = GenericProcess::attach(1).unwrap();
 
-        let operation_result = process.read_from_vm(999998, &mut buffer[0..]);
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read, GenericRegionState::Resident, 500, 100),
+                    (200..250).collect()),
+            ]
+        );
+
+        let operation_result = process.read_from_vm(500, &mut buffer[0..]);
 
         println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
 
         // Did it succeed?
-        assert!(matches!( operation_result, Err(GenericOSErrors::PartialReadCopy) ));
+        //assert!(matches!( operation_result, Err(GenericOSErrors::PartialReadCopy) ));
+        assert_eq!(operation_result, Err(GenericOSErrors::PartialReadCopy) );
 
         // Was the buffer written?
-        let mut expected_buffer = vec![1; 50];
+        let mut expected_buffer: Vec<u8> = (200..250).collect();
         expected_buffer.extend(vec![0; 50]);
 
         assert_eq!(buffer, expected_buffer);
