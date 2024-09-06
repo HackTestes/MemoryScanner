@@ -948,7 +948,8 @@ mod tests
         assert_eq!(Err(GenericOSErrors::SnapshotBufferIsTooSmall), snapshot_workload);
     }
 
-    // Previous bug detection
+    // This test detects a bug where big pages were skipped during the snapshot copy operation
+    // It meant that the the big page wasn't copied, because it wouldn't fit, but the subsequent smaller one would
     #[test]
     fn TestProcessSnapshot_Bug_SkipBigPages()
     {
