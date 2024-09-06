@@ -150,10 +150,13 @@ cargo build [--release]
 
 * Features
 
-    * [ ] Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
+    * [ ] QoL:Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
         * Goal: Allow the search to discard pages that can't be read, essentially ignoring errors. In my experimentation, some pages return errors despite everything being correct, so I don't want them to stop the whole search process
         * How: During the copy of pages, report the pages that returned errors and update the golbal pages list
         * Current workaround: insted of reporting a failure, I fill the buffer with zeros. This approach, however, wastes RAM and CPU power on useless searches, also having the potential to cause false matches when looking for 0.
+
+    * [ ] QoL: Dsiplay a message to the user when the selected buffer is insufficient, insted of panicking
+        * How: remove unwrap for the search and actually check for errors
 
 * Modules
     * [x] Test moving closure API for thread pool
