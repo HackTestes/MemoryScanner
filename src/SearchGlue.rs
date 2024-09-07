@@ -766,6 +766,7 @@ mod tests
     // This test detects a bug where the initial pages were being reused for multiple searches
     // This happend when the buffer was smaller than the combined size of the regions
     // And it was caused because the threads received all the pages, inted of only the copied ones
+    // Note: it also detected matches reuse when using regions of different sizes
     #[test]
     fn TestFilterSearch_Bug_RegionReuse()
     {
@@ -832,7 +833,7 @@ mod tests
         let filter_result = FilterSearchComparator(
             search_result,
             &process,
-            1,
+            4,
             100,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
@@ -846,6 +847,77 @@ mod tests
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 400, 100), (0..100).collect()),
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 50), (0..50).collect()),
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (0..100).collect()),
+            ];
+        assert_eq!(filter_result, expected_filter);
+    }
+
+    // This detects the bug where the start region ajustment was used incorrectly, causing the thread to search at the start of the region
+    // (insted of looking at its private section)
+    #[test]
+    fn TestFilterSearch_Bug_IncorrectStart()
+    {
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    [ vec![1; 25], vec![2; 25], vec![3; 25], vec![4; 25] ].concat()),
+            ]
+        );
+
+        let mut search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            &process,
+            4,
+            100,
+            1000,
+            LinearSearch_Comparator_u8, // It is possible to infer the type from this function
+            vec![(SearchEngines::ComparisonOperation::Equal, 2)]
+        ).unwrap();
+
+        for region_match in search_result.iter()
+        {
+            println!("Search: {}", region_match.display_matches(MatchDisplayStyle::Decimal));
+        }
+
+        // This checks not only if the pages are correct, but also that the pages came in order
+        // If the start was used incorrectly, this would be empty
+        let expected: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 100, 100), (25..50).collect()),
+            ];
+        assert_eq!(search_result, expected);
+
+        search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            &process,
+            4,
+            100,
+            1000,
+            LinearSearch_Comparator_u8, // It is possible to infer the type from this function
+            vec![(SearchEngines::ComparisonOperation::Unequal, 0)]
+        ).unwrap();
+
+        let filter_result = FilterSearchComparator(
+            search_result,
+            &process,
+            4,
+            100,
+            1000,
+            LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
+            vec![(SearchEngines::ComparisonOperation::Equal, 3)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself
+            // This would be empty as well
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 100, 100), (50..75).collect()),
             ];
         assert_eq!(filter_result, expected_filter);
     }
