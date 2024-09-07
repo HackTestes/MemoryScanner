@@ -657,7 +657,7 @@ mod tests
         assert_eq!(filter_result, expected_filter);
     }
 
-    
+
     // This is to make sure that the results return the original regions
     #[test]
     fn TestFilterSearch_RegularCase_FilterTheFilteredResults()
@@ -753,5 +753,92 @@ mod tests
         );
 
         assert_eq!(filter_result, Err(SearchErrors::TargetTypeTooBig));
+    }
+
+
+    // This test detects a bug where the initial pages were being reused for multiple searches
+    // This happend when the buffer was smaller than the combined size of the regions
+    // And it was caused because the threads received all the pages, inted of only the copied ones
+    #[test]
+    fn TestFilterSearch_Bug_RegionReuse()
+    {
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 200, 80),
+                    vec![2; 80]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 300, 90),
+                    vec![3; 90]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 400, 100),
+                    vec![4; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 500, 50),
+                    vec![5; 50]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 100),
+                    vec![6; 100]),
+            ]
+        );
+
+        let search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            &process,
+            4,
+            100,
+            1000,
+            LinearSearch_Comparator_u8, // It is possible to infer the type from this function
+            vec![(SearchEngines::ComparisonOperation::Unequal, 1)]
+        ).unwrap();
+
+        for region_match in search_result.iter()
+        {
+            println!("Search: {}", region_match.display_matches(MatchDisplayStyle::Decimal));
+        }
+
+        // This checks not only if the pages are correct, but also that the pages came in order
+        // If the pages are being reused, this would be empty
+        let expected: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 200, 80), (0..80).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 300, 90), (0..90).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 400, 100), (0..100).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 50), (0..50).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (0..100).collect()),
+            ];
+        assert_eq!(search_result, expected);
+
+        let filter_result = FilterSearchComparator(
+            search_result,
+            &process,
+            4,
+            500,
+            1000,
+            LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
+            vec![(SearchEngines::ComparisonOperation::Unequal, 2)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![
+            // The matches represent the relative address in the region, not the value itself
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 300, 90), (0..90).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 400, 100), (0..100).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 50), (0..50).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 100), (0..100).collect()),
+            ];
+        assert_eq!(filter_result, expected_filter);
     }
 }
