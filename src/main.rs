@@ -45,7 +45,7 @@ fn parse_operations<T: std::str::FromStr>(target_operations: Vec<(SearchEngines:
 }
 
 // This function is here to help me with code reuse (normal action and the freeze option)
-fn write_action_subroutine(command_config: &Configuration::Config, process_handle: &GenericOSInterface::GenericProcess)
+fn write_action_subroutine(command_config: &Configuration::Config, process_handle: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
     let write_result = match command_config.target_type
     {
@@ -85,9 +85,10 @@ fn write_action_subroutine(command_config: &Configuration::Config, process_handl
     if write_result.is_err()
     {
         eprintln!("Error in writing operation: {:?}", write_result);
+        return write_result;
     }
 
-    println!("Write successful!");
+    return Ok(());
 }
 
 fn engine_comparator_subroutine(command_config: Configuration::Config, mut results: Vec<Matches::AddressMatches>, process_handle: &GenericOSInterface::GenericProcess) -> Vec<Matches::AddressMatches>
@@ -481,6 +482,7 @@ fn main()
 
                 if command_config.engine == SearchEngines::Engines::comparator
                 {
+
                     results = engine_comparator_subroutine(command_config, results, &process_handle);
                     println!("{} matches found", GetNumberOfMatches(&results));
                     continue;
@@ -518,7 +520,12 @@ fn main()
             {
                 if command_config.freeze == false
                 {
-                    write_action_subroutine(&command_config, &process_handle);
+                    let write_r = write_action_subroutine(&command_config, &process_handle);
+
+                    if write_r.is_ok()
+                    {
+                        println!("Write successful!");
+                    }
                 }
 
                 else
@@ -548,7 +555,7 @@ fn main()
                             // sleep
                             thread::sleep(millis);
                 
-                            // read mutex
+                            // read atomic
                             if (should_thread_stop_read.load(Ordering::Relaxed)) == true
                             {
                                 break;
