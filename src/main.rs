@@ -1,6 +1,7 @@
 use std::env;
 use std::io;
 use std::io::Write;
+use std::time;
 use std::time::Duration;
 use std::thread;
 use std::sync::Arc;
@@ -91,16 +92,15 @@ fn write_action_subroutine(command_config: &Configuration::Config, process_handl
     return Ok(());
 }
 
-fn engine_comparator_subroutine(command_config: Configuration::Config, mut results: Vec<Matches::AddressMatches>, process_handle: &GenericOSInterface::GenericProcess) -> Vec<Matches::AddressMatches>
+fn engine_comparator_subroutine(command_config: Configuration::Config, mut results: Vec<Matches::AddressMatches>, process_handle: &GenericOSInterface::GenericProcess) -> Result<Vec<Matches::AddressMatches>, SearchGlue::SearchErrors>
 {
-    let mut search_results = vec![];
 
     if command_config.engine == SearchEngines::Engines::comparator
     {
         // It we are not filtering, we should start a new search
         if command_config.filter == false
         {
-            search_results = match command_config.target_type
+            return match command_config.target_type
             {
                 Configuration::TargetType::u8 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -112,7 +112,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_u8, 
                     parse_operations::<u8>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u16 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -124,7 +124,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_u16, 
                     parse_operations::<u16>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u32 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -136,7 +136,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_u32, 
                     parse_operations::<u32>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u64 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -148,7 +148,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_u64, 
                     parse_operations::<u64>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u128 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -160,7 +160,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_u128, 
                     parse_operations::<u128>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i8 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -172,7 +172,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_i8, 
                     parse_operations::<i8>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i16 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -184,7 +184,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_i16, 
                     parse_operations::<i16>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i32 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -196,7 +196,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_i32, 
                     parse_operations::<i32>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i64 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -208,7 +208,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_i64, 
                     parse_operations::<i64>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i128 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -220,7 +220,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_i128, 
                     parse_operations::<i128>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::f32 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -232,7 +232,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_f32, 
                     parse_operations::<f32>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::f64 => SearchGlue::StartSearchComparator(
                     command_config.page_permissions_at_least,
@@ -244,7 +244,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_Comparator_f64, 
                     parse_operations::<f64>(command_config.operations)
-                ).unwrap(),
+                ),
             };
         }
 
@@ -252,7 +252,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
         else
         {
             println!("Filtering results");
-            search_results = match command_config.target_type
+            return match command_config.target_type
             {
                 Configuration::TargetType::u8 => SearchGlue::FilterSearchComparator(
                     results,
@@ -262,7 +262,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_u8,
                     parse_operations::<u8>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u16 => SearchGlue::FilterSearchComparator(
                     results,
@@ -272,7 +272,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_u16,
                     parse_operations::<u16>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u32 => SearchGlue::FilterSearchComparator(
                     results,
@@ -282,7 +282,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_u32,
                     parse_operations::<u32>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u64 => SearchGlue::FilterSearchComparator(
                     results,
@@ -292,7 +292,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_u64,
                     parse_operations::<u64>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::u128 => SearchGlue::FilterSearchComparator(
                     results,
@@ -302,7 +302,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_u128,
                     parse_operations::<u128>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i8 => SearchGlue::FilterSearchComparator(
                     results,
@@ -312,7 +312,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_i8,
                     parse_operations::<i8>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i16 => SearchGlue::FilterSearchComparator(
                     results,
@@ -322,7 +322,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_i16,
                     parse_operations::<i16>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i32 => SearchGlue::FilterSearchComparator(
                     results,
@@ -332,7 +332,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_i32,
                     parse_operations::<i32>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i64 => SearchGlue::FilterSearchComparator(
                     results,
@@ -342,7 +342,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_i64,
                     parse_operations::<i64>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::i128 => SearchGlue::FilterSearchComparator(
                     results,
@@ -352,7 +352,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_i128,
                     parse_operations::<i128>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::f32 => SearchGlue::FilterSearchComparator(
                     results,
@@ -362,7 +362,7 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_f32,
                     parse_operations::<f32>(command_config.operations)
-                ).unwrap(),
+                ),
 
                 Configuration::TargetType::f64 => SearchGlue::FilterSearchComparator(
                     results,
@@ -372,12 +372,12 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
                     command_config.thread_storage,
                     SearchEngines::LinearSearch_ComparatorFilter_f64,
                     parse_operations::<f64>(command_config.operations)
-                ).unwrap(),
+                ),
             };
         }
     }
 
-    return search_results;
+    return Ok(vec![]);
 }
 
 fn main_help()
@@ -479,10 +479,42 @@ fn main()
             CLIFrontEnd::ActionsEnum::Search =>
             {
                 println!("Starting search");
+                let timer = time::Instant::now();
 
-                if command_config.engine == SearchEngines::Engines::comparator
+                let search_results_r:Result<Vec<Matches::AddressMatches>, SearchGlue::SearchErrors> = match command_config.engine
                 {
+                    SearchEngines::Engines::comparator =>
+                    {
+                        // I clone the value here because in case of errors it might not be initialized
+                        // So this is a poor's man save, so the user doesn't lose its search
+                        engine_comparator_subroutine(command_config, results.clone(), &process_handle)
+                    },
 
+                    SearchEngines::Engines::exact =>
+                    {
+                        eprintln!("Exact engine not supported yet!");
+                        continue;
+                    },
+                };
+
+                if search_results_r.is_ok()
+                {
+                    // We found something, then save it
+                    let search_time = timer.elapsed();
+                    results = search_results_r.unwrap();
+
+                    // User output
+                    println!("{} matches found\n", GetNumberOfMatches(&results));
+                    println!("Search took:\n {}s\n {}ms\n {}us\n", search_time.as_secs(), search_time.as_millis(), search_time.as_micros());
+                }
+                else
+                {
+                    // An error occurred, tell the user
+                    println!("Error in the search: {:?}", search_results_r);
+                };
+
+                /*if command_config.engine == SearchEngines::Engines::comparator
+                {
                     results = engine_comparator_subroutine(command_config, results, &process_handle);
                     println!("{} matches found", GetNumberOfMatches(&results));
                     continue;
@@ -492,7 +524,7 @@ fn main()
                 {
                     eprintln!("Exact engine not supported yet!");
                     continue;
-                }
+                }*/
             },
 
             CLIFrontEnd::ActionsEnum::Display =>
