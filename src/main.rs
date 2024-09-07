@@ -499,9 +499,6 @@ fn main()
 
                 for result_section in &results
                 {
-                    // TODO: add this to the display function
-                    println!("Num of matches in the section: {} \n", &result_section.matches.len());
-
                     match command_config.display_style
                     {
                         Matches::MatchDisplayStyle::Hex =>

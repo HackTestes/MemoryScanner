@@ -89,6 +89,7 @@ impl AddressMatches
         mem_region_string += format!("-> State: {} \n", self.mem_region.state).as_str();
         mem_region_string += format!("-> Base address: {} \n", self.mem_region.base_address).as_str();
         mem_region_string += format!("-> Size (bytes): {} \n", self.mem_region.size_bytes).as_str();
+        mem_region_string += format!("-> Number of matches in the region: {} \n", self.matches.len()).as_str();
         mem_region_string += format!("\n").as_str();
 
         // Addresses
