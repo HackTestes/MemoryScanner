@@ -110,6 +110,8 @@ pub fn StartParallelSearchLinearComparator<T: Send + 'static + Clone>(
 
 pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
     arc_previous_results: &Arc<Vec<Matches::AddressMatches>>,
+    start_copy_region: usize,
+    copies_done: usize,
     arc_copy_buffer: &Arc<Vec<u8>>,
     thread_workload: &mut Vec< Vec<(usize, usize)> >,
     operations: &Vec<(SearchEngines::ComparisonOperation, T)>,
@@ -123,7 +125,9 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
             Vec<(SearchEngines::ComparisonOperation, T)>,
             fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize, &[usize]) -> Vec<usize>,
             Vec<GenericOSInterface::GenericMemoryRegion>,
-            Arc<Vec<Matches::AddressMatches>>
+            Arc<Vec<Matches::AddressMatches>>, 
+            usize,
+            usize
         ),
         Vec<Vec<usize>> >,
     thread_task: fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize, &[usize]) -> Vec<usize>
@@ -140,7 +144,9 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                 operations.clone(),
                 thread_task,
                 memory_regions.to_vec(), // aka clone the slice
-                arc_previous_results.clone()),
+                arc_previous_results.clone(),
+                start_copy_region,
+                copies_done),
                 |args| -> Vec< Vec<usize> >
             {
                 // Unpack args
@@ -150,7 +156,9 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                 let operations = args.3;
                 let t_task = args.4;
                 let regions = args.5;
-                let previous_matches = args.6;
+                let start_copy_region = args.7;
+                let copies_done = args.8;
+                let previous_matches = &args.6[start_copy_region..(start_copy_region+copies_done)]; // Get only the matches from the copied regions
 
                 let mut thread_results = vec![];
 
@@ -171,7 +179,7 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
                     let buff_end = regions[region_idx].size_bytes + buff_start;
                     //let buff_end = end + current_buffer_pos;
 
-                    // DEBUG ONLY: $env:RUSTFLAGS='--cfg debug_print="StartParallelSearchLinearComparator"'
+                    // DEBUG ONLY: $env:RUSTFLAGS='--cfg debug_print="FilterParallelSearchLinearComparator"'
                     #[cfg(debug_print = "FilterParallelSearchLinearComparator")]
                     {
                         //println!(" Buffer:\n{:?} \n Matches:\n{:?} \n Slice:\n{:?}", &arc_buffer, &previous_matches[region_idx].matches[start..end], &arc_buffer[current_buffer_pos..(current_buffer_pos+regions[region_idx].size_bytes)]);
@@ -436,7 +444,9 @@ mod tests
             Vec<(SearchEngines::ComparisonOperation, u32)>,
             fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, u32)], usize, &[usize]) -> Vec<usize>,
             Vec<GenericOSInterface::GenericMemoryRegion>,
-            Arc<Vec<Matches::AddressMatches>>),
+            Arc<Vec<Matches::AddressMatches>>,
+            usize,
+            usize),
             Vec<Vec<usize>>
         >::new(num_threads).unwrap();
 
@@ -446,6 +456,8 @@ mod tests
 
         let all_results = FilterParallelSearchLinearComparator(
             &previous_matches,
+            0,
+            4,
             &arc_buffer,
             &mut thread_workload,
             &operations,

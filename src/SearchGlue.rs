@@ -218,8 +218,11 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
                                                     Vec<(SearchEngines::ComparisonOperation, T)>,
                                                     fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize, &[usize]) -> Vec<usize>,
                                                     Vec<GenericOSInterface::GenericMemoryRegion>,
-                                                    Arc<Vec<Matches::AddressMatches>>),
-                                                    Vec<Vec<usize>> >::new(num_threads);
+                                                    Arc<Vec<Matches::AddressMatches>>,
+                                                    usize,
+                                                    usize),
+                                                    Vec<Vec<usize>>,
+                                                    >::new(num_threads);
 
     let mut thread_pool = match thread_pool_r
     {
@@ -257,6 +260,10 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         // Perform the search filtering in parallel
         let all_results = SearchRoutines::FilterParallelSearchLinearComparator::<T>(
             &arc_previous_results,
+
+            // Copying the matches can be quite expensive so making an Arc out of a slice isn't possible. Reason why I pass the whole thing and the necessary info to slice it in the thread
+            start_copy_position,
+            copies_done,
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
@@ -825,8 +832,8 @@ mod tests
         let filter_result = FilterSearchComparator(
             search_result,
             &process,
-            4,
-            500,
+            1,
+            100,
             1000,
             LinearSearch_ComparatorFilter_u8, // It is possible to infer the type from this function
             vec![(SearchEngines::ComparisonOperation::Unequal, 2)]
@@ -834,6 +841,7 @@ mod tests
 
         let expected_filter: Vec<AddressMatches> = vec![
             // The matches represent the relative address in the region, not the value itself
+            // This would be empty as well
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 300, 90), (0..90).collect()),
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 400, 100), (0..100).collect()),
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 50), (0..50).collect()),
