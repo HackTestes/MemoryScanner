@@ -70,7 +70,7 @@ macro_rules! Comparator
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
-            let mut match_addresses: Vec<usize> = Vec::with_capacity(match_buffer_size * size_of::<usize>());
+            let mut match_addresses: Vec<usize> = Vec::with_capacity(match_buffer_size);
 
             // Iterate over positions
             // Note that safety must be guaranteed by the function itself (see workload partitioning - slice_view)
@@ -156,7 +156,7 @@ macro_rules! ComparatorFilter
         {
             // Store all the results
             // Buffer sized if based on usize's size - how many addresses can we store?
-            let mut match_addresses: Vec<usize> = Vec::with_capacity(match_buffer_size * size_of::<usize>());
+            let mut match_addresses: Vec<usize> = Vec::with_capacity(match_buffer_size);
 
             // Iterate pervious matches
             // Note that the slice must contain the searched matches
