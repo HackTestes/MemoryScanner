@@ -1123,6 +1123,24 @@ mod tests
     }
 
     #[test]
+    fn CLITest_Option_TargetOperations_MunltipleInputs()
+    {
+        assert_eq!(
+            argument_parsing("search -to > 10 -to < 20".to_string()).unwrap().operations,
+            vec![
+                (SearchEngines::ComparisonOperation::Greater, "10".to_string()),
+                (SearchEngines::ComparisonOperation::Less, "20".to_string())
+            ]);
+
+        assert_eq!(
+            argument_parsing("search -to >= 5 -to <= 25".to_string()).unwrap().operations,
+            vec![
+                (SearchEngines::ComparisonOperation::GreaterOrEqual, "5".to_string()),
+                (SearchEngines::ComparisonOperation::LessOrEqual, "25".to_string())
+            ]);
+    }
+
+    #[test]
     fn CLITest_Option_TargetOperationsFail()
     {
         assert_eq!(
