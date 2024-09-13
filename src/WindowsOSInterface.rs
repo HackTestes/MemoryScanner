@@ -131,6 +131,13 @@ impl MemoryRegionIterator
         // Note, you CANNOT combine permissions in Windows
         // https://learn.microsoft.com/en-us/windows/win32/memory/memory-protection-constants
 
+        // Check the page_guard modifiers as they cannot be accessed and can fire memory violations (even from ReadProcessMemory)
+        // Consider them No access
+        if (page_permission & windows_sys::Win32::System::Memory::PAGE_GUARD) == windows_sys::Win32::System::Memory::PAGE_GUARD
+        {
+            return GenericOSInterface::PageProtection_NoAccess;
+        }
+
         // Execute only
         if (page_permission & windows_sys::Win32::System::Memory::PAGE_EXECUTE) == windows_sys::Win32::System::Memory::PAGE_EXECUTE
         {
@@ -214,8 +221,8 @@ impl MemoryRegionIterator
 
     fn windows_translate_page_specific_to_generic(memory_region: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION) -> GenericOSInterface::GenericMemoryRegion
     {
-        // Get permissions
-        let generic_permission: GenericOSInterface::GenericPageProtections = Self::windows_get_page_permissions_generic(memory_region.AllocationProtect);
+        // Get the current permissions, careful to not use AllocationProtect (this represents the INITIAL permissions)!
+        let generic_permission: GenericOSInterface::GenericPageProtections = Self::windows_get_page_permissions_generic(memory_region.Protect);
 
         // Get region state
         let generic_region_state: GenericOSInterface::GenericRegionState = Self::windows_get_region_state_generic(memory_region.State);
@@ -293,6 +300,7 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
     {
         // No
         eprintln!("Error from read. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        eprintln!("Page: {:#?}", (absolute_vm_address, buffer.len(), transfered_bytes));
         buffer.fill(0);
         return Ok(());
         //return Err(GenericOSInterface::GenericOSErrors::GenericFail);
