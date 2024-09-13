@@ -80,7 +80,9 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             // If there is any error, return immediately
             Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
         };
-        
+
+        println!("Copy buffer info \nCopies done: {}/{}\n", start_copy_position+copies_done, memory_regions.len());
+
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
         let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions[start_copy_position..(start_copy_position+copies_done)], size_of::<T>());
 
@@ -245,6 +247,8 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
             // If there is any error, return immediately
             Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
         };
+
+        println!("Copy buffer info \nCopies done: {}/{}\n", start_copy_position+copies_done, memory_regions.len());
 
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
         let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view_filter(num_threads, &arc_previous_results[start_copy_position..(start_copy_position+copies_done)]);
