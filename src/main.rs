@@ -504,27 +504,15 @@ fn main()
                     results = search_results_r.unwrap();
 
                     // User output
+                    print!("\n"); // Minor formatting
+                    println!("Total search time:\n {}s\n {}ms\n {}us\n", search_time.as_secs(), search_time.as_millis(), search_time.as_micros());
                     println!("{} matches found\n", GetNumberOfMatches(&results));
-                    println!("Search took:\n {}s\n {}ms\n {}us\n", search_time.as_secs(), search_time.as_millis(), search_time.as_micros());
                 }
                 else
                 {
                     // An error occurred, tell the user
                     println!("Error in the search: {:?}", search_results_r);
                 };
-
-                /*if command_config.engine == SearchEngines::Engines::comparator
-                {
-                    results = engine_comparator_subroutine(command_config, results, &process_handle);
-                    println!("{} matches found", GetNumberOfMatches(&results));
-                    continue;
-                }
-
-                if command_config.engine == SearchEngines::Engines::exact
-                {
-                    eprintln!("Exact engine not supported yet!");
-                    continue;
-                }*/
             },
 
             CLIFrontEnd::ActionsEnum::Display =>
