@@ -418,15 +418,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_EXECUTE,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_EXECUTE,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -440,15 +440,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_EXECUTE_READ,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_EXECUTE_READ,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -462,15 +462,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_EXECUTE_READWRITE,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_EXECUTE_READWRITE,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -484,15 +484,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_READONLY,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_READONLY,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -506,15 +506,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_READWRITE,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_READWRITE,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -528,15 +528,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_EXECUTE_WRITECOPY,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_EXECUTE_WRITECOPY,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -550,15 +550,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_WRITECOPY,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_WRITECOPY,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -572,15 +572,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_NOACCESS,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_NOACCESS,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -594,15 +594,15 @@ mod tests
         let memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_READONLY | windows_sys::Win32::System::Memory::PAGE_NOCACHE,
+            AllocationProtect: 0,
             RegionSize: 0,
             PartitionId: 0,
             State: 0,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_READONLY | windows_sys::Win32::System::Memory::PAGE_NOCACHE,
             Type: 0,
         };
 
-        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.AllocationProtect);
+        let generic_memory_info_perms = MemoryRegionIterator::windows_get_page_permissions_generic(memory_info.Protect);
 
         println!("{}", generic_memory_info_perms);
 
@@ -616,11 +616,11 @@ mod tests
         let mut memory_info: windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION = windows_sys::Win32::System::Memory::MEMORY_BASIC_INFORMATION {
             BaseAddress: std::ptr::null_mut(),
             AllocationBase: std::ptr::null_mut(),
-            AllocationProtect: windows_sys::Win32::System::Memory::PAGE_READONLY | windows_sys::Win32::System::Memory::PAGE_NOCACHE,
+            AllocationProtect: 0,
             RegionSize: 10240,
             PartitionId: 0,
             State: windows_sys::Win32::System::Memory::MEM_COMMIT,
-            Protect: 0,
+            Protect: windows_sys::Win32::System::Memory::PAGE_READONLY | windows_sys::Win32::System::Memory::PAGE_NOCACHE,
             Type: 0,
         };
 
