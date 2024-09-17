@@ -183,6 +183,7 @@ impl FakeGenericMemoryRegion
 pub struct GenericProcess
 {
     handle: OSInterface::OSSpecificHandle,
+    pid: u64,
 
     // An attribute to hold the custom test image from  the create method
     #[cfg(test)]
@@ -214,10 +215,10 @@ impl GenericProcess
         };
 
         #[cfg(test)]
-        return Ok(GenericProcess{handle: handle, custom_image: OSInterface::default_test_process_image()});
+        return Ok(GenericProcess{handle: handle, pid: process_id, custom_image: OSInterface::default_test_process_image()});
 
         #[cfg(not(test))]
-        return Ok(GenericProcess{handle: handle});
+        return Ok(GenericProcess{handle: handle, pid: process_id});
     }
 
     // A function that can only be used during tests
@@ -225,7 +226,12 @@ impl GenericProcess
     #[cfg(test)]
     pub fn create(process_id: u64, custom_image_input: Vec< FakeGenericMemoryRegion >) -> Self
     {
-        return GenericProcess{handle: process_id, custom_image: custom_image_input};
+        return GenericProcess{handle: process_id, pid: process_id, custom_image: custom_image_input};
+    }
+
+    pub fn pid(&self) -> u64
+    {
+        return self.pid;
     }
 
     // It also returns with pages info, nut it allows the caller to filter some desired proporties
@@ -442,7 +448,7 @@ mod tests
         println!("{:?}", result);
 
         // Does it return a handle?
-        assert_eq!( result, Ok(GenericProcess { handle: 1 , custom_image: OSInterface::default_test_process_image()}) );
+        assert_eq!( result, Ok(GenericProcess { handle: 1, pid: 1, custom_image: OSInterface::default_test_process_image()}) );
     }
 
     // Does the attach method check for errors and return the handle on success?
@@ -454,6 +460,14 @@ mod tests
 
         // Does it return the error?
         assert!( matches!( result, Err(GenericOSErrors::GenericFail) ) );
+    }
+
+    #[test]
+    fn TestGetTargetPID()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+
+        assert_eq!(1, process.pid());
     }
 
     #[test]
