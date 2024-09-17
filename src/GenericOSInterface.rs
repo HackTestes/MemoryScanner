@@ -329,7 +329,10 @@ impl GenericProcess
                 match result
                 {
                     Ok(_) => (),
-                    Err(error) => return Err(error)
+                    Err(error) => {
+                        eprintln!("Page that caused an an error: {:#?}", region);
+                        return Err(error);
+                    }
                 };
 
                 // Update the control info
