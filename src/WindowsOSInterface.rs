@@ -298,9 +298,10 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
     // Was it successful?
     if success_code == 0
     {
+        use std::mem::size_of;
         // No
         eprintln!("Error from read. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
-        eprintln!("Page: {:#?}", (absolute_vm_address, buffer.len(), transfered_bytes));
+        eprintln!("Page: {:#?}", (format!("{:#01$X}", absolute_vm_address, size_of::<usize>() * 2 + 2), buffer.len(), transfered_bytes));
         buffer.fill(0);
         return Ok(());
         //return Err(GenericOSInterface::GenericOSErrors::GenericFail);
