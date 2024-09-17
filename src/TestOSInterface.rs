@@ -88,6 +88,33 @@ pub fn close_handle(handle: OSSpecificHandle) -> Result<(), GenericOSInterface::
     }
 }
 
+#[cfg(test)]
+pub fn pause_process(process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
+{
+    if process.pid() < 9999
+    {
+        return Ok(());
+    }
+
+    else
+    {
+        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+    }
+}
+
+#[cfg(test)]
+pub fn resume_process(process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
+{
+    if process.pid() < 9999
+    {
+        return Ok(());
+    }
+
+    else
+    {
+        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+    }
+}
 
 #[cfg(test)]
 pub struct MemoryRegionIterator

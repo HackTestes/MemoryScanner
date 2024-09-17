@@ -372,6 +372,30 @@ impl GenericProcess
         return Ok(copies_done);
     }
 
+    // The main benefit of pause and resume in searches is that it allows the search to work as an atomic operation
+    // Why is this important? Pages can be freed or moved around during the search, causing errors, generating exceptions and even crashing the program (yes, just reading can crash the traget on Windows)
+    pub fn pause(&self) -> Result<(), GenericOSErrors>
+    {
+        let result = OSInterface::pause_process(self);
+
+        match result
+        {
+            Ok(_) => return Ok(()),
+            Err(error) => return Err(error)
+        };
+    }
+
+    pub fn resume(&self) -> Result<(), GenericOSErrors>
+    {
+        let result = OSInterface::resume_process(self);
+
+        match result
+        {
+            Ok(_) => return Ok(()),
+            Err(error) => return Err(error)
+        };
+    }
+
     // It returns the copy operations that will be necessary to create a snapshot and which region to start, given a buffer size
     // This also has the advantage of being able to do "look-ahead" and warn if all regions can be fit in the buffer (insted of doing it during the search)
     // Why not use an Iterator? I tried and it didn't work

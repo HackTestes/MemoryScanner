@@ -34,6 +34,9 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
     // Allocating space for the results
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
+    // Pause the process before interacting with it
+    process_handle.pause();
+
     // Get all pages
     println!("Getting memory sections infomation...");
     let get_mem_regions_info_timer = time::Instant::now();
@@ -52,7 +55,10 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
         Ok(work) => work,
 
         // If there is any error, return immediately
-        Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
+        Err(error) => {
+            process_handle.resume(); // Don't forget to resume the process in case of errors
+            return Err(SearchErrors::OSInterfaceError(error));
+        }
     };
 
     // Create the thread pool
@@ -68,7 +74,10 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
     let mut thread_pool = match thread_pool_r
     {
         Ok(pool) => pool,
-        Err(error) => return Err(SearchErrors::ThreadPoolErrors(error))
+        Err(error) => {
+            process_handle.resume(); // Don't forget to resume the process in case of errors
+            return Err(SearchErrors::ThreadPoolErrors(error));
+        }
     };
     
     // Loops over the the copy operations needed
@@ -85,7 +94,10 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             Ok(num_copies) => num_copies,
             
             // If there is any error, return immediately
-            Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
+            Err(error) => {
+                process_handle.resume(); // Don't forget to resume the process in case of errors
+                return Err(SearchErrors::OSInterfaceError(error));
+            }
         };
 
         let snapshot_elapsed = snapshot_timer.elapsed();
@@ -100,7 +112,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
         let arc_copy_buffer = Arc::new(copy_buffer);
 
         // Perform the search in parallel
-        println!("Performing the parallel search...");
+        println!("Performing the search...");
         let buffer_search_timer = time::Instant::now();
 
         let all_results = SearchRoutines::StartParallelSearchLinearComparator::<T>(
@@ -114,7 +126,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
         );
 
         let buffer_search_elapsed = buffer_search_timer.elapsed();
-        println!("Memory sections copied: {}s   {}ms   {}us\n", buffer_search_elapsed.as_secs(), buffer_search_elapsed.as_millis(), buffer_search_elapsed.as_micros());
+        println!("Search time: {}s   {}ms   {}us\n", buffer_search_elapsed.as_secs(), buffer_search_elapsed.as_millis(), buffer_search_elapsed.as_micros());
 
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
@@ -131,8 +143,10 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
         );
 
         let merge_elapsed = merge_timer.elapsed();
-        println!("Memory sections copied: {}s   {}ms   {}us\n", merge_elapsed.as_secs(), merge_elapsed.as_millis(), merge_elapsed.as_micros());
+        println!("Merge time: {}s   {}ms   {}us\n", merge_elapsed.as_secs(), merge_elapsed.as_millis(), merge_elapsed.as_micros());
     }
+
+    process_handle.resume();
 
     return Ok(search_results);
 }
@@ -195,6 +209,9 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
 {
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
+    // Pause the process before interacting with it
+    process_handle.pause();
+
     // Get all the pages from the previous results
     // Store a copy of all of the regions that will search
     println!("Ajusting matches pages...");
@@ -204,7 +221,10 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     let memory_regions: Vec<GenericOSInterface::GenericMemoryRegion> = match memory_regions_r
     {
         Ok(ajusted_pages) => ajusted_pages,
-        Err(error) => return Err(error),
+        Err(error) => {
+            process_handle.resume(); // Don't forget to resume the process in case of errors
+            return Err(error);
+        }
     };
 
     let page_ajustment_elapsed = page_ajustment_timer.elapsed();
@@ -236,7 +256,10 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         Ok(work) => work,
 
         // If there is any error, return immediately
-        Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
+        Err(error) => {
+            process_handle.resume(); // Don't forget to resume the process in case of errors
+            return Err(SearchErrors::OSInterfaceError(error));
+        }
     };
 
     // Create the thread pool
@@ -255,7 +278,10 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     let mut thread_pool = match thread_pool_r
     {
         Ok(pool) => pool,
-        Err(error) => return Err(SearchErrors::ThreadPoolErrors(error))
+        Err(error) => {
+            process_handle.resume(); // Don't forget to resume the process in case of errors
+            return Err(SearchErrors::ThreadPoolErrors(error));
+        }
     };
 
     // Loops over the the copy operations needed
@@ -272,7 +298,10 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
             Ok(num_copies) => num_copies,
 
             // If there is any error, return immediately
-            Err(error) => return Err(SearchErrors::OSInterfaceError(error)),
+            Err(error) => {
+                process_handle.resume(); // Don't forget to resume the process in case of errors
+                return Err(SearchErrors::OSInterfaceError(error));
+            }
         };
 
         let snapshot_elapsed = snapshot_timer.elapsed();
@@ -292,7 +321,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         let arc_copy_buffer = Arc::new(copy_buffer);
 
         // Perform the search filtering in parallel
-        println!("Performing the parallel filtering search...");
+        println!("Performing the filtering search...");
         let buffer_search_timer = time::Instant::now();
 
         let all_results = SearchRoutines::FilterParallelSearchLinearComparator::<T>(
@@ -311,7 +340,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         );
 
         let buffer_search_elapsed = buffer_search_timer.elapsed();
-        println!("Memory sections copied: {}s   {}ms   {}us\n", buffer_search_elapsed.as_secs(), buffer_search_elapsed.as_millis(), buffer_search_elapsed.as_micros());
+        println!("Filter search time: {}s   {}ms   {}us\n", buffer_search_elapsed.as_secs(), buffer_search_elapsed.as_millis(), buffer_search_elapsed.as_micros());
 
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
@@ -328,7 +357,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         );
 
         let merge_elapsed = merge_timer.elapsed();
-        println!("Memory sections copied: {}s   {}ms   {}us\n", merge_elapsed.as_secs(), merge_elapsed.as_millis(), merge_elapsed.as_micros());
+        println!("Merge time: {}s   {}ms   {}us\n", merge_elapsed.as_secs(), merge_elapsed.as_millis(), merge_elapsed.as_micros());
     }
 
     return Ok(search_results);

@@ -34,7 +34,7 @@ pub fn get_process_handle(process_id: u64) -> Result<windows_sys::Win32::Foundat
     // If it returns NULL (0), something went wrong
     if handle == 0
     {
-        eprintln!("Error from opening a process. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        eprintln!("Error from opening a process. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
@@ -53,6 +53,41 @@ pub fn close_handle(handle: windows_sys::Win32::Foundation::HANDLE) -> Result<()
 
     else
     {
+        eprintln!("Error from closing the process handle. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn pause_process(process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
+{
+    let result = unsafe{windows_sys::Win32::System::Diagnostics::Debug::DebugActiveProcess( process.pid() as u32 )};
+
+    if result != 0
+    {
+        return Ok(());
+    }
+
+    else
+    {
+        eprintln!("Error from pausing the process. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn resume_process(process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
+{
+    let result = unsafe{windows_sys::Win32::System::Diagnostics::Debug::DebugActiveProcessStop( process.pid() as u32 )};
+
+    if result != 0
+    {
+        return Ok(());
+    }
+
+    else
+    {
+        eprintln!("Error from resuming the process. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 }
@@ -268,7 +303,7 @@ pub fn write_into_process_vm(process_handle: windows_sys::Win32::Foundation::HAN
     // If it returns NULL (0), something went wrong
     if success_code == 0
     {
-        eprintln!("Error from write. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        eprintln!("Error from write. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
@@ -300,7 +335,7 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
     {
         use std::mem::size_of;
         // No
-        eprintln!("Error from read. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        eprintln!("Error from read. Windows rror code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         eprintln!("Page: {:#?}", (format!("{:#01$X}", absolute_vm_address, size_of::<usize>() * 2 + 2), buffer.len(), transfered_bytes));
         buffer.fill(0);
         return Ok(());
@@ -310,7 +345,7 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
     // It was successful, but it only made a partial copy
     if (transfered_bytes != 0) && (transfered_bytes != buffer.len())
     {
-        eprintln!("Error from read. Error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        eprintln!("Error from read. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::PartialReadCopy)
     }
 
