@@ -34,9 +34,6 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
     // Allocating space for the results
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
-    // Pause the process before interacting with it
-    process_handle.pause();
-
     // Get all pages
     println!("Getting memory sections infomation...");
     let get_mem_regions_info_timer = time::Instant::now();
@@ -56,7 +53,6 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
 
         // If there is any error, return immediately
         Err(error) => {
-            process_handle.resume(); // Don't forget to resume the process in case of errors
             return Err(SearchErrors::OSInterfaceError(error));
         }
     };
@@ -75,7 +71,6 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
     {
         Ok(pool) => pool,
         Err(error) => {
-            process_handle.resume(); // Don't forget to resume the process in case of errors
             return Err(SearchErrors::ThreadPoolErrors(error));
         }
     };
@@ -95,7 +90,6 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             
             // If there is any error, return immediately
             Err(error) => {
-                process_handle.resume(); // Don't forget to resume the process in case of errors
                 return Err(SearchErrors::OSInterfaceError(error));
             }
         };
@@ -145,8 +139,6 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
         let merge_elapsed = merge_timer.elapsed();
         println!("Merge time: {}s   {}ms   {}us\n", merge_elapsed.as_secs(), merge_elapsed.as_millis(), merge_elapsed.as_micros());
     }
-
-    process_handle.resume();
 
     return Ok(search_results);
 }
@@ -209,9 +201,6 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
 {
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
 
-    // Pause the process before interacting with it
-    process_handle.pause();
-
     // Get all the pages from the previous results
     // Store a copy of all of the regions that will search
     println!("Ajusting matches pages...");
@@ -222,7 +211,6 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     {
         Ok(ajusted_pages) => ajusted_pages,
         Err(error) => {
-            process_handle.resume(); // Don't forget to resume the process in case of errors
             return Err(error);
         }
     };
@@ -257,7 +245,6 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
 
         // If there is any error, return immediately
         Err(error) => {
-            process_handle.resume(); // Don't forget to resume the process in case of errors
             return Err(SearchErrors::OSInterfaceError(error));
         }
     };
@@ -279,7 +266,6 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     {
         Ok(pool) => pool,
         Err(error) => {
-            process_handle.resume(); // Don't forget to resume the process in case of errors
             return Err(SearchErrors::ThreadPoolErrors(error));
         }
     };
@@ -299,7 +285,6 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
 
             // If there is any error, return immediately
             Err(error) => {
-                process_handle.resume(); // Don't forget to resume the process in case of errors
                 return Err(SearchErrors::OSInterfaceError(error));
             }
         };

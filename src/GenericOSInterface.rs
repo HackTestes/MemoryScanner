@@ -149,7 +149,7 @@ impl GenericMemoryRegion
 }
 
 // A fake memory region for testing
-// This is just to be a name tuple
+// This is just to be a named tuple
 #[cfg(test)]
 #[derive(Debug, PartialEq)]
 pub struct FakeGenericMemoryRegion
@@ -165,6 +165,29 @@ impl FakeGenericMemoryRegion
     pub fn new(mem_region: GenericMemoryRegion, payload: Vec<u8>) -> Self
     {
         return FakeGenericMemoryRegion{ memory_region: mem_region, payload: payload };
+    }
+}
+
+// The paused state is tracked by this object, meaning that when it gets out of scope
+// the target process is resumed
+// The goal is to avoid having to manually track down when to resume
+pub struct PausedProcessTracker<'a, 'b>(&'a GenericProcess, Option<&'b mut bool>);
+
+impl Drop for PausedProcessTracker<'_, '_>
+{
+    fn drop(&mut self)
+    {
+        // This code only really needs to run during tests
+        #[cfg(test)]
+        if self.1 != None
+        {
+            // Get the reference to the object and then modify it, alerting the outer world
+            let mut state_ref: &mut bool = self.1.as_deref_mut().unwrap();
+            *state_ref = !*state_ref;
+        }
+
+        // The tracker is being dropped, resume the process
+        self.0.resume();
     }
 }
 
@@ -374,24 +397,62 @@ impl GenericProcess
 
     // The main benefit of pause and resume in searches is that it allows the search to work as an atomic operation
     // Why is this important? Pages can be freed or moved around during the search, causing errors, generating exceptions and even crashing the program (yes, just reading can crash the traget on Windows)
-    pub fn pause(&self) -> Result<(), GenericOSErrors>
+    // Can only be used in this file
+    pub (in crate::GenericOSInterface) fn pause(&self) -> Result<(), GenericOSErrors>
     {
         let result = OSInterface::pause_process(self);
 
         match result
         {
-            Ok(_) => return Ok(()),
+            Ok(_) => {
+                //self.running = false;
+                return Ok(());
+            },
+
             Err(error) => return Err(error)
         };
     }
 
-    pub fn resume(&self) -> Result<(), GenericOSErrors>
+    // A version of the pause function that is tracked automatically, so when the tracker gets out of scope
+    // the process is resumed
+    // This is the public face of the API
+    pub fn tracked_pause(&self) -> Result<PausedProcessTracker, GenericOSErrors>
+    {
+        let result = self.pause();
+
+        match result
+        {
+            Ok(_) => return Ok(PausedProcessTracker(self, None)),
+            Err(error) => return Err(error)
+        };
+    }
+
+    // A version of the tracked_pause function that exposes a varible for testing if drop was called or not
+    // This version simply changes the state of a bool, being true or false
+    #[cfg(test)]
+    pub fn tracked_pause_test<'a, 'b>(&'a self, state: &'b mut bool) -> Result<PausedProcessTracker, GenericOSErrors>
+    where 'b: 'a // This means that the state var lives as long as 'a/the process
+    {
+        let result = self.pause();
+
+        match result
+        {
+            Ok(_) => return Ok(PausedProcessTracker(self, Some(state))),
+            Err(error) => return Err(error)
+        };
+    }
+
+    // This can only be used inside of this file, otherwise consumers might call resume in wrong places
+    pub (in crate::GenericOSInterface) fn resume(&self) -> Result<(), GenericOSErrors>
     {
         let result = OSInterface::resume_process(self);
 
         match result
         {
-            Ok(_) => return Ok(()),
+            Ok(_) => {
+                return Ok(());
+            },
+
             Err(error) => return Err(error)
         };
     }
@@ -492,6 +553,20 @@ mod tests
         let process = GenericProcess::attach(1).unwrap();
 
         assert_eq!(1, process.pid());
+    }
+
+    #[test]
+    fn TestProcessPause()
+    {
+        let process = GenericProcess::attach(1).unwrap();
+        let mut state = false;
+
+        {
+            let tracker = process.tracked_pause_test(&mut state).unwrap();
+        }
+
+        // Was it resumed after Drop? Did the tracker called resume?
+        assert_eq!(true, state);
     }
 
     #[test]

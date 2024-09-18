@@ -485,6 +485,9 @@ fn main()
                 {
                     SearchEngines::Engines::comparator =>
                     {
+                        // Pause the process before interacting with it
+                        let pause_process_tracker = process_handle.tracked_pause();
+
                         // I clone the value here because in case of errors it might not be initialized
                         // So this is a poor's man save, so the user doesn't lose its search
                         engine_comparator_subroutine(command_config, results.clone(), &process_handle)
