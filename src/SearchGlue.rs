@@ -199,7 +199,8 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     thread_task: fn(&[u8], usize, &[(SearchEngines::ComparisonOperation, T)], usize, &[usize]) -> Vec<usize>,
     operations: Vec<(SearchEngines::ComparisonOperation, T)>) -> Result<Vec<Matches::AddressMatches>, SearchErrors>
 {
-    let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(10240);
+    // Create a vec that is as big as the previous matches, it can only be as smaller than the previous one and this avoids new reallocations
+    let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(previous_results.len());
 
     // Get all the pages from the previous results
     // Store a copy of all of the regions that will search
