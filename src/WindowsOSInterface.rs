@@ -173,6 +173,12 @@ impl MemoryRegionIterator
             return GenericOSInterface::PageProtection_NoAccess;
         }
 
+        // Consider them No access
+        if (page_permission & windows_sys::Win32::System::Memory::PAGE_WRITECOMBINE) == windows_sys::Win32::System::Memory::PAGE_WRITECOMBINE
+        {
+            return GenericOSInterface::PageProtection_NoAccess;
+        }
+
         // Execute only
         if (page_permission & windows_sys::Win32::System::Memory::PAGE_EXECUTE) == windows_sys::Win32::System::Memory::PAGE_EXECUTE
         {
@@ -335,7 +341,7 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
     {
         use std::mem::size_of;
         // No
-        eprintln!("Error from read. Windows rror code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        eprintln!("Error from read. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         eprintln!("Page: {:#?}", (format!("{:#01$X}", absolute_vm_address, size_of::<usize>() * 2 + 2), buffer.len(), transfered_bytes));
         buffer.fill(0);
         return Ok(());
