@@ -78,7 +78,9 @@ macro_rules! Comparator
             // u8: [0..10] -> 10 - (1-1) = 10 | stops at 9 and reads only 9
             // u32: [0..10] -> 10 - (4-1) = 7 | stops at 6 and reads 6,7,8,9
             // u64: [0..10] -> 10 - (8-1) = 3 | stops at 2 and reads 2,3,4,5,6,7,8,9
-            let end: usize = mem_region_slice_view.len() - (size_of::<$target_type>() - 1);
+
+            // undeflow protection
+            let end: usize = if mem_region_slice_view.len() != 0 {mem_region_slice_view.len() - (size_of::<$target_type>() - 1)} else {0};
             for current_pos in 0..end
             {
                 // Assume that it will match

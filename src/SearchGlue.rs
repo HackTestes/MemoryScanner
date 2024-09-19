@@ -912,7 +912,7 @@ mod tests
         assert_eq!(filter_result, expected_filter);
     }
 
-    // This detects the bug where the start region ajustment was used incorrectly, causing the thread to search at the start of the region
+    // This detects the bug where the start region ajustment was used incorrectly, causing the thread to always search at the start of the region
     // (insted of looking at its private section)
     #[test]
     fn TestFilterSearch_Bug_IncorrectStart()
@@ -979,6 +979,68 @@ mod tests
             // The matches represent the relative address in the region, not the value itself
             // This would be empty as well
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 100, 100), (50..75).collect()),
+            ];
+        assert_eq!(filter_result, expected_filter);
+    }
+
+    // Bug caused by an interger undeflow in the SearchRoutine, causing the start search to make a read out of bounds
+    // The underflow was caused during the calculation of the end position to read in empty workloads and in workloads that target types bigger than 1 byte (u32 for instance)
+    #[test]
+    fn TestFilterSearch_Bug_EmptyWorkloadIntUnderflow()
+    {
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 400, 2),
+                    vec![1; 2]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 500, 5),
+                    vec![1; 5]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 50),
+                    vec![5; 50]),
+            ]
+        );
+
+        let search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            &process,
+            8,
+            100,
+            1000,
+            LinearSearch_Comparator_u32,
+            vec![(ComparisonOperation::Greater, 0)]
+        ).unwrap();
+
+        let expected: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 5), (0..2).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 50), (0..47).collect()),
+            ];
+        assert_eq!(search_result, expected);
+
+
+        let filter_result = FilterSearchComparator(
+            search_result,
+            &process,
+            8,
+            100,
+            1000,
+            LinearSearch_ComparatorFilter_u32, // It is possible to infer the type from this function
+            vec![(ComparisonOperation::Greater, 0)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 5), (0..2).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 50), (0..47).collect()),
             ];
         assert_eq!(filter_result, expected_filter);
     }
