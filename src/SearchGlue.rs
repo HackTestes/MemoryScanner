@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::mem::size_of;
 use std::mem;
 use std::time;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
@@ -190,8 +191,32 @@ pub fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_
     return Ok(ajusted_mem_regions);
 }
 
+fn validate_pages(previous_results: Vec<Matches::AddressMatches>, current_regions: Vec<GenericOSInterface::GenericMemoryRegion>) -> Vec<Matches::AddressMatches>
+{
+    let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(previous_results.len());
+
+    // Generate a hashmap of each structure for easy query
+    let current_regions_hash_map: HashMap<usize, GenericOSInterface::GenericMemoryRegion> = current_regions.into_iter().map(|x| (x.base_address, x)).collect::<HashMap<_, _>>();
+
+    for region_match in previous_results
+    {
+        // Make the call only once
+        let closest_current_region = current_regions_hash_map.get(&region_match.mem_region.base_address);
+
+        // Check if isn't None, so it doesn't panic
+        if closest_current_region != None && region_match.mem_region == *closest_current_region.unwrap()
+        {
+            // Move the page if it matches perfectly
+            // Any difference indicates that the page was altered (or even freed) and that results from here are now invalid
+            search_results.push(region_match);
+        }
+    }
+
+    return search_results;
+}
+
 pub fn FilterSearchComparator<T: Send + 'static + Clone>(
-    previous_results: Vec<Matches::AddressMatches>,
+    mut previous_results: Vec<Matches::AddressMatches>,
     process_handle: &GenericOSInterface::GenericProcess,
     num_threads: usize,
     buffer_size: usize,
@@ -201,6 +226,24 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
 {
     // Create a vec that is as big as the previous matches, it can only be as smaller than the previous one and this avoids new reallocations
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(previous_results.len());
+
+    println!("Getting memory sections infomation...");
+    let get_mem_regions_info_timer = time::Instant::now();
+        let current_memory_regions = process_handle.get_mem_regions_info(GenericOSInterface::PageProtection_NoAccess, None, None).unwrap();
+    let get_mem_regions_info_elapsed = get_mem_regions_info_timer.elapsed();
+    println!("Memory sections retrieved: {}s   {}ms   {}us\n", get_mem_regions_info_elapsed.as_secs(), get_mem_regions_info_elapsed.as_millis(), get_mem_regions_info_elapsed.as_micros());
+
+
+
+
+    println!("Removing pages that were changed...");
+    let validate_mem_regions_timer = time::Instant::now();
+        // Reassign the variable with validated pages
+        previous_results = validate_pages(previous_results, current_memory_regions);
+    let validate_mem_regions_elapsed = validate_mem_regions_timer.elapsed();
+    println!("Memory sections validated: {}s   {}ms   {}us\n", validate_mem_regions_elapsed.as_secs(), validate_mem_regions_elapsed.as_millis(), validate_mem_regions_elapsed.as_micros());
+
+
 
     // Get all the pages from the previous results
     // Store a copy of all of the regions that will search
@@ -217,7 +260,9 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     };
 
     let page_ajustment_elapsed = page_ajustment_timer.elapsed();
-    println!("Memory sections copied: {}s   {}ms   {}us\n", page_ajustment_elapsed.as_secs(), page_ajustment_elapsed.as_millis(), page_ajustment_elapsed.as_micros());
+    println!("Memory sections ajusted: {}s   {}ms   {}us\n", page_ajustment_elapsed.as_secs(), page_ajustment_elapsed.as_millis(), page_ajustment_elapsed.as_micros());
+
+
 
     // DEBUG ONLY
     #[cfg(debug_print = "FilterSearchComparator")]
@@ -673,6 +718,83 @@ mod tests
 
         assert_eq!(Err(SearchErrors::TargetTypeTooBig), ajusted_pages);
     }
+
+    #[test]
+    fn TestFilterRegionValidation_RegularCase()
+    {
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let mut process = GenericProcess::create(
+            1, // PID
+            vec![
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 400, 2),
+                    vec![1; 2]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 500, 5),
+                    vec![1; 5]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 50),
+                    vec![5; 50]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 50),
+                    vec![6; 50]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 800, 50),
+                    vec![7; 50]),
+            ]
+        );
+
+        let search_result = StartSearchComparator(
+            PageProtection_Read|PageProtection_Write,
+            None,
+            None,
+            &process,
+            8,
+            100,
+            1000,
+            LinearSearch_Comparator_u32,
+            vec![(ComparisonOperation::Greater, 0)]
+        ).unwrap();
+
+        let expected: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 500, 5), (0..2).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 600, 50), (0..47).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 700, 50), (0..47).collect()),
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 50), (0..47).collect()),
+            ];
+        assert_eq!(search_result, expected);
+
+        // Simulate a change in the sections
+        process.custom_image[0].memory_region.state = GenericRegionState::Free;
+        process.custom_image[1].memory_region.base_address = 555;
+        process.custom_image[2].memory_region.size_bytes = 77;
+        process.custom_image[2].payload = vec![3; 77]; // Ajust the payload to match the new size
+        process.custom_image[3].memory_region.permissions = GenericPageProtectionsStruct::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute);
+
+
+        let filter_result = FilterSearchComparator(
+            search_result,
+            &process,
+            8,
+            100,
+            1000,
+            LinearSearch_ComparatorFilter_u32, // It is possible to infer the type from this function
+            vec![(ComparisonOperation::Greater, 0)]
+        ).unwrap();
+
+        let expected_filter: Vec<AddressMatches> = vec![
+            AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 50), (0..47).collect()),
+            ];
+        assert_eq!(filter_result, expected_filter);
+    }
+
 
     #[test]
     fn TestFilterSearch_RegularCase()
