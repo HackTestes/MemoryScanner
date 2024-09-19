@@ -100,6 +100,9 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
         // It we are not filtering, we should start a new search
         if command_config.filter == false
         {
+            // Since we are starting a new search, drop the current results immediately
+            results = vec![];
+
             return match command_config.target_type
             {
                 Configuration::TargetType::u8 => SearchGlue::StartSearchComparator(
