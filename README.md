@@ -51,7 +51,7 @@ command [OPTIONS]
 
 In this mode we know the value that we are trying to find, but we don't know the type or the location in the memory. So, we make an educated guess (integer of 4 bytes) and scan the memory in hopes of finding its address. To avoid copying the entire target process (which is quite expensive), we can filter for only pages that can be written.
 
-After copying the necessary memory, we covert small parts to the disired type (i32 == signed integer of 4 bytes) and compare the values, furthermore we parallelize this operation.
+After copying the necessary memory, we covert small parts to the desired type (i32 == signed integer of 4 bytes) and compare the values, furthermore we parallelize this operation.
 
 PS: the implementation here copies a whole memory block of contiguous writable memory to avoid costs related to context switching.
 
@@ -68,7 +68,7 @@ So, due to increased complexity, this mode will not be supported.
 ## Key features
 
 ### Read process memory
-- Serach for values in memory
+- Search for values in memory
     - Use exact values (u8, u16, u32, u64, i32, i64, f32, f64)
 
 ### Write process memory
@@ -85,7 +85,7 @@ So, due to increased complexity, this mode will not be supported.
 
 ### Set up debug printing information
 
-Select rust flags (Windows). The falgs are only valid for that terminal session
+Select rust flags (Windows). The flags are only valid for that terminal session
 ```
 $env:RUSTFLAGS='--cfg flag_name="flag value"'
 
@@ -140,9 +140,13 @@ cargo build [--release]
 
     * [ ] Reduce memory usage
         * Goal: memory allocations can be slow
-        * How: remove buffer cloning where possible in the codebase
+        * How: remove buffer cloning where possible in the codebase. I might be able to acheive it by using a scoped thread pool implementation and share slices
+        
+    * [ ] Add IDs to regions
+        * Goal: I don't remember anymore, but I suspect it has to do with better management of pages (aka access them directly in a hash map)
+        * How: we can create an ID based on the base address and the region size
 
-* Stability and corectness
+* Stability and correctness
 
     * [ ] Add more unit tests
         * Goal: Detect the behaviour of misaligned filter searches (the global match page ajustment)
@@ -152,10 +156,10 @@ cargo build [--release]
 
     * [ ] QoL:Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
         * Goal: Allow the search to discard pages that can't be read, essentially ignoring errors. In my experimentation, some pages return errors despite everything being correct, so I don't want them to stop the whole search process
-        * How: During the copy of pages, report the pages that returned errors and update the golbal pages list
+        * How: During the copy of pages, report the pages that returned errors and update the global pages list
         * Current workaround: insted of reporting a failure, I fill the buffer with zeros. This approach, however, wastes RAM and CPU power on useless searches, also having the potential to cause false matches when looking for 0.
 
-    * [ ] QoL: Dsiplay a message to the user when the selected buffer is insufficient, insted of panicking
+    * [ ] QoL: Display a message to the user when the selected buffer is insufficient, instead of panicking
         * How: remove unwrap for the search and actually check for errors
 
 * Modules
