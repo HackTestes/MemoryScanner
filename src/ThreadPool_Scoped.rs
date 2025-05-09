@@ -19,8 +19,9 @@
 // Implementation of a thread pool to reduce the need of recreating threads all of the time
 // It reduces the cost of thread creation syscall
 
-use std::sync::mpsc;
+#![feature(thread_spawn_unchecked)]
 use std::thread;
+use std::sync::mpsc;
 use std::mem;
 
 #[derive(Debug)]
@@ -190,7 +191,7 @@ pub struct ThreadPool<ARGS, RETURN_STRUCT>
 }
 
 // Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
-impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
+impl<ARGS: Send, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
 {
     pub fn new(num_threads: usize) -> Result<ThreadPool<ARGS, RETURN_STRUCT>, TPErrors>
     {
@@ -214,7 +215,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
             let thread_task_rcv = thread.take_worker_task_receiver();
             let thread_result_sender = thread.take_worker_result_sender();
 
-            let thread_handle = thread::spawn(move|| -> Result<(), String>
+            let thread_handle = unsafe{thread::Builder::new().spawn_unchecked(move|| -> Result<(), String>
                 {
                     loop
                     {
@@ -234,7 +235,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
                         // Send the return values back to main. It should also wake it up, if it is waiting
                         thread_result_sender.send(results).unwrap();
                     }
-                });
+                }).unwrap()};
 
             // Store the thread handle into the structure
             thread.handle = Some(thread_handle);
@@ -380,7 +381,7 @@ macro_rules! scope_execute
 mod tests
 {
     // Import the current module to all tests
-    use crate::ThreadPool::*;
+    use crate::ThreadPool_Scoped::*;
 
     #[test]
     fn TestPool()
