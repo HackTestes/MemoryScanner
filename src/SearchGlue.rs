@@ -15,6 +15,7 @@ use std::collections::HashMap;
 #[derive(PartialEq)]
 pub enum SearchErrors
 {
+    NoCorrespondingRegion_AjustedToOriginal,
     TargetTypeTooBig,
     OSInterfaceError(GenericOSInterface::GenericOSErrors),
     ThreadPoolErrors(ThreadPool::TPErrors)
@@ -82,12 +83,12 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
         // Create a snapshot of the process (copy it to the buffer)
         println!("Copying the target's memory into the buffer...");
         let snapshot_timer = time::Instant::now();
-            let snapshot_result = process_handle.snapshot_bounded(&memory_regions[(start_copy_position)..], &mut copy_buffer[0..]);
+            let snapshot_result = process_handle.snapshot_bounded(&memory_regions[(start_copy_position)..], &mut copy_buffer[0..], false);
 
         // Check for errors
-        let copies_done = match snapshot_result
+        let snapshot_return = match snapshot_result
         {
-            Ok(num_copies) => num_copies,
+            Ok(res) => res,
             
             // If there is any error, return immediately
             Err(error) => {
@@ -95,13 +96,15 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             }
         };
 
+        let copies_done: usize = snapshot_return.regions_read;
+
         let snapshot_elapsed = snapshot_timer.elapsed();
         println!("Memory sections copied: {}s   {}ms   {}us\n", snapshot_elapsed.as_secs(), snapshot_elapsed.as_millis(), snapshot_elapsed.as_micros());
 
         println!("Copy buffer info \nCopies done: {}/{}\n", start_copy_position+copies_done, memory_regions.len());
 
         // Create the workload partitioning for that particular buffer, you must consider the target type for the search
-        let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &memory_regions[start_copy_position..(start_copy_position+copies_done)], size_of::<T>());
+        let mut thread_workload = WorkloadPartitioning::partition_thread_workload_equal_slice_view(num_threads, &snapshot_return.regions_copied, size_of::<T>());
 
         // Make the buffer shareable
         let arc_copy_buffer = Arc::new(copy_buffer);
@@ -114,7 +117,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
-            &memory_regions[start_copy_position..(start_copy_position+copies_done)], // Use only the regions that were actually copied
+            &snapshot_return.regions_copied, // Use only the regions that were actually copied
             thread_private_store_size,
             &mut thread_pool,
             thread_task
@@ -132,7 +135,7 @@ pub fn StartSearchComparator<T: Send + 'static + Clone>(
 
         ResultMergerHelpers::MergeLinearSearchResults(
             all_results,
-            &memory_regions[start_copy_position..(start_copy_position+copies_done)],
+            &snapshot_return.regions_copied,
             num_threads,
             &mut search_results
         );
@@ -191,6 +194,7 @@ pub fn ajust_pages_min_max(previous_matches: &[Matches::AddressMatches], target_
     return Ok(ajusted_mem_regions);
 }
 
+// Removes pages that have no results
 fn validate_pages(previous_results: Vec<Matches::AddressMatches>, current_regions: Vec<GenericOSInterface::GenericMemoryRegion>) -> Vec<Matches::AddressMatches>
 {
     let mut search_results: Vec<Matches::AddressMatches> = Vec::with_capacity(previous_results.len());
@@ -214,6 +218,53 @@ fn validate_pages(previous_results: Vec<Matches::AddressMatches>, current_region
 
     return search_results;
 }
+
+// Get the original pages from the ajusted ones
+// The main goal here is to keep the orignal information from the pages without changing other functions or creating weird APIs
+// Assumptions
+//     - I am assuming that both input pages are in the same order. This means that in both arrays page "1000" comes before "2000" and this before "3000" and so on.
+//     - Pages must be in the same order, but it accepts gaps (say we don't have page "2000" in the ajusted array, we would only skip it in the original one)
+//     - The original array must contain all the pages present in the ajusted one (original is a superset of ajusted), so if it doesn't find the corresponding region, it fails (this mitigates the other assumptions)
+fn ajusted_page_to_original(ajusted_mem_regions: &[GenericOSInterface::GenericMemoryRegion], original_memory_regions: &[GenericOSInterface::GenericMemoryRegion]) -> Result<Vec<GenericOSInterface::GenericMemoryRegion>, SearchErrors>
+{
+
+    // After every loop we increase this value in other to simulate a remove from the start of the original array
+    // Given that the assumptions hold, after every loop we won't ever need to compare again the page for subsequent sarches
+    let mut original_index: usize = 0;
+
+    let mut original_pages: Vec<GenericOSInterface::GenericMemoryRegion> = vec![];
+
+    // For every ajusted page, look for a match in the original array
+    for ajusted_region in ajusted_mem_regions
+    {
+        // Track whether this loop wasn't able to find the original page 
+        let mut found_match: bool = false;
+
+        while (original_index < original_memory_regions.len())
+        {
+            let original_region: GenericOSInterface::GenericMemoryRegion = original_memory_regions[ original_index ].clone();
+
+            if ajusted_region.id == original_region.id
+            {
+                original_pages.push( original_region );
+                original_index += 1;
+                found_match = true;
+                break;
+            }
+
+            // Page searched and got no match, "remove it" anyways
+            original_index += 1;
+        }
+
+        if found_match == false
+        {
+            return Err(SearchErrors::NoCorrespondingRegion_AjustedToOriginal);
+        }
+    }
+
+    return Ok(original_pages);
+}
+
 
 pub fn FilterSearchComparator<T: Send + 'static + Clone>(
     mut previous_results: Vec<Matches::AddressMatches>,
@@ -322,18 +373,20 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         // Create a snapshot of the process (copy it to the buffer)
         println!("Copying the target's memory into the buffer...");
         let snapshot_timer = time::Instant::now();
-            let snapshot_result = process_handle.snapshot_bounded(&memory_regions[start_copy_position..], &mut copy_buffer[0..]);
+            let snapshot_result = process_handle.snapshot_bounded(&memory_regions[start_copy_position..], &mut copy_buffer[0..], false);
 
         // Check for errors
-        let copies_done = match snapshot_result
+        let snapshot_return = match snapshot_result
         {
-            Ok(num_copies) => num_copies,
+            Ok(res) => res,
 
             // If there is any error, return immediately
             Err(error) => {
                 return Err(SearchErrors::OSInterfaceError(error));
             }
         };
+
+        let copies_done: usize = snapshot_return.regions_read;
 
         let snapshot_elapsed = snapshot_timer.elapsed();
         println!("Memory sections copied: {}s   {}ms   {}us\n", snapshot_elapsed.as_secs(), snapshot_elapsed.as_millis(), snapshot_elapsed.as_micros());
@@ -364,7 +417,7 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
             &arc_copy_buffer,
             &mut thread_workload,
             &operations,
-            &memory_regions[start_copy_position..(start_copy_position+copies_done)], // Use only the regions that were actually copied
+            &snapshot_return.regions_copied, // Use only the regions that were actually copied
             thread_private_store_size,
             &mut thread_pool,
             thread_task
@@ -376,13 +429,16 @@ pub fn FilterSearchComparator<T: Send + 'static + Clone>(
         // Give the buffer back its ownership
         copy_buffer = Arc::try_unwrap(arc_copy_buffer).unwrap();
 
+        let original_regions_copied = ajusted_page_to_original(&snapshot_return.regions_copied, &original_memory_regions[start_copy_position..]).unwrap();
+
         // Now merge everything in order for each of the pages copied in the buffer
         println!("Merging results...");
         let merge_timer = time::Instant::now();
 
         ResultMergerHelpers::MergeLinearSearchResults(
             all_results,
-            &original_memory_regions[start_copy_position..(start_copy_position+copies_done)],
+            //&original_memory_regions[start_copy_position..(start_copy_position+copies_done)],
+            &original_regions_copied,
             num_threads,
             &mut search_results
         );

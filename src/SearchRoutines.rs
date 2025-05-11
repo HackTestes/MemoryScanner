@@ -52,7 +52,7 @@ pub fn StartParallelSearchLinearComparator<T: Send + 'static + Clone>(
             let t_task = args.4;
             let regions = args.5;
 
-            let mut thread_results = vec![];
+            let mut thread_results = Vec::with_capacity(1000);
 
             // This value is used so we can get the correct region from the buffer
             // Aka I am getting the region's position in the buffer
@@ -98,6 +98,8 @@ pub fn StartParallelSearchLinearComparator<T: Send + 'static + Clone>(
 
                 // Use the buffer size as an offset
                 current_buffer_pos = current_buffer_pos + regions[region_idx].size_bytes;
+
+                //println!("T Task: {}/{}", region_idx+1, workload.len());
             }
 
             return thread_results;

@@ -11,6 +11,7 @@ use crate::TestOSInterface as OSInterface;
 
 use std::fmt;
 
+#[derive(Clone)]
 #[derive(PartialEq)]
 #[derive(Debug)]
 pub enum GenericOSErrors
@@ -131,7 +132,8 @@ pub struct GenericMemoryRegion
     pub permissions: GenericPageProtectionsStruct,
     pub state: GenericRegionState,
     pub base_address: usize, // Read it as the absolute virtual addresss in the target virtual space
-    pub size_bytes: usize
+    pub size_bytes: usize,
+    pub id: usize // I am creating an id that doesn't change, when pages are "ajusted" so we can trace things
 }
 
 impl GenericMemoryRegion
@@ -143,7 +145,8 @@ impl GenericMemoryRegion
             permissions: GenericPageProtectionsStruct::new(page_permissions),
             state: region_state,
             base_address: page_absolute_address,
-            size_bytes: size
+            size_bytes: size,
+            id: page_absolute_address // Base address is usually unique, so we can use it as an ID
         };
     }
 }
@@ -191,6 +194,15 @@ impl Drop for PausedProcessTracker<'_, '_>
     }
 }
 
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
+pub struct SnapshotReturn
+{
+    pub regions_read: usize,
+    pub regions_copied: Vec<GenericMemoryRegion>,
+    pub regions_with_read_errors: Vec<GenericMemoryRegion>
+}
 
 // It represents a single ATTACHED process
 // Attaching early is important to avoid process ID race conditions
@@ -337,8 +349,9 @@ impl GenericProcess
         };
     }
 
+    /*
     // Builds a snapshot of the process memory based on certain regions and buffer size
-    // On seccess, it resturn the amount of regions that were copied to the buffer, so the caller can ajust the parameters and retry the copy with the remaining regions
+    // On seccess, it returns the amount of regions that were copied to the buffer, so the caller can ajust the parameters and retry the copy with the remaining regions
     // _bounded: it respects the limit of the buffer
     pub fn snapshot_bounded(&self, target_mem_regions: &[GenericMemoryRegion], buffer: &mut [u8]) -> Result<usize, GenericOSErrors>
     {
@@ -393,6 +406,93 @@ impl GenericProcess
         }
 
         return Ok(copies_done);
+    }
+    */
+
+    // Builds a snapshot of the process memory based on certain regions and buffer size
+    // On seccess, it returns the regions that were copied, the ones that could not be copied and how many copies were considered
+    // Return:
+    //     Regions: number of regions considered, so we don't need to derive this value from the caller* 
+    //     Copied regions: so we can get the exact pages that were copied without needed to reference another buffer (say, an index of regions in another vec)
+    //     Errored regions: mostly for error checking when we don't stop on errors (think of it as a log for errors)
+    // _bounded: it respects the limit of the buffer
+    pub fn snapshot_bounded(&self, target_mem_regions: &[GenericMemoryRegion], buffer: &mut [u8], stop_on_error: bool) -> Result<SnapshotReturn, GenericOSErrors>
+    {
+        let mut regions_read: usize = 0;
+        let mut regions_copied: Vec<GenericMemoryRegion> = vec![];
+        let mut regions_with_read_errors: Vec<GenericMemoryRegion> = vec![]; 
+        //let mut copies_done: usize = 0;
+        let max_space = buffer.len(); // Just a way to rename the var to a more friendly name
+        let mut space_used: usize = 0;
+
+        for region in target_mem_regions
+        {
+            // Does it fit in the remaining space?
+            if region.size_bytes + space_used <= max_space
+            {
+                // Yes, then make the copy
+                // Offset the buffer by the spaced used by the other copies
+                let result = self.read_from_vm(region.base_address, &mut buffer[space_used..(space_used+region.size_bytes)]);
+
+                // Check is the read op was successful
+                match result
+                {
+                    // Yes
+                    Ok(_) => {
+
+                        // Save the region in the buffer
+                        regions_copied.push( region.clone() );
+
+                        // Space can only be used by valid copies
+                        space_used += region.size_bytes;
+                    },
+
+                    // The region caused an error during the read operation
+                    Err(error) => {
+                        eprintln!("Page that caused an an error: {:#?}", region);
+
+                        // "Log" the error
+                        regions_with_read_errors.push( region.clone() );
+
+                        if stop_on_error == true
+                        {
+                            return Err(error);
+                        }
+                    }
+                };
+
+                // Update the control info
+                regions_read += 1; // This is valid for both successful and failed read ops
+            }
+
+            // The page goes out of range, no need to continue the loop
+            else
+            {
+                break;
+            }
+        }
+
+        // Check for regions too big that no copy was done
+        if (target_mem_regions.len() != 0) && (regions_read == 0)
+        {
+            return Err(GenericOSErrors::SnapshotBufferIsTooSmall);
+        }
+
+        // DEGUG ONLY
+        #[cfg(debug_print = "GOSI_snapshot_bounded")]
+        {
+            println!("Snapshot");
+            println!("Copies done: {}", copies_done);
+            println!("Space used / max size: {} / {}", space_used, max_space);
+            println!("Regions copied: {:#?}", target_mem_regions[..copies_done].to_vec());
+            println!("\n\n");
+        }
+
+        return Ok( SnapshotReturn{
+            regions_read: regions_read,
+            regions_copied: regions_copied,
+            regions_with_read_errors: regions_with_read_errors
+        } );
     }
 
     // The main benefit of pause and resume in searches is that it allows the search to work as an atomic operation
@@ -515,7 +615,6 @@ impl GenericProcess
 
         return Ok(copy_operations);
     }
-
 }
 
 
@@ -905,13 +1004,15 @@ mod tests
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
 
-        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+        let stop_on_error: bool = false;
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..], stop_on_error);
 
         println!("Memory regions: {:?}", memory_regions);
         println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
 
         // Did it succeed?
-        assert!(matches!( snapshot_result, Ok(10) ));
+        assert!(matches!( snapshot_result.unwrap().regions_copied.len(), 10 ));
 
         // Was the buffer written?
         let mut expect: Vec<u8> = (0..100).collect();
@@ -939,14 +1040,17 @@ mod tests
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
 
-        let mut snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+        let stop_on_error: bool = false;
+
+        let mut snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..], stop_on_error);
 
         println!("Memory regions: {:?}", memory_regions);
         println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
 
         // Did it succeed?
-        assert!(matches!( snapshot_result, Ok(9) ));
-        let copies_done = snapshot_result.unwrap();
+        assert_eq!(snapshot_result.clone().unwrap().regions_copied.len(), 9);
+        
+        let copies_done = snapshot_result.unwrap().regions_read;
 
         // Was the buffer written?
         let mut expect: Vec<u8> = (0..100).collect();
@@ -964,10 +1068,10 @@ mod tests
         buffer.fill(0);
         assert_eq!(buffer, vec![0; 900]);
 
-        snapshot_result = process.snapshot_bounded(&memory_regions[copies_done..], &mut buffer[0..]);
+        snapshot_result = process.snapshot_bounded(&memory_regions[copies_done..], &mut buffer[0..], stop_on_error);
 
         // Did it succeed?
-        assert!(matches!( snapshot_result, Ok(1) ));
+        assert!(matches!( snapshot_result.unwrap().regions_copied.len(), 1 ));
 
         expect = (9..109).collect();
         expect.append(&mut vec![0; 800]);
@@ -984,7 +1088,9 @@ mod tests
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
 
-        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+        let stop_on_error: bool = false;
+        
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..], stop_on_error);
 
         println!("Memory regions: {:?}", memory_regions);
         println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
@@ -1003,6 +1109,8 @@ mod tests
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
 
+        let stop_on_error: bool = false;
+
         let snapshot_workload = GenericProcess::get_snapshot_workload(&memory_regions[0..], buffer.len());
 
         let expected_work: Vec<usize> = vec![0, 5];
@@ -1010,14 +1118,14 @@ mod tests
     
         for start_pos in snapshot_workload.unwrap()
         {
-            let snapshot_result = process.snapshot_bounded(&memory_regions[(start_pos)..], &mut buffer[0..]);
+            let snapshot_result = process.snapshot_bounded(&memory_regions[(start_pos)..], &mut buffer[0..], stop_on_error);
 
             println!("Memory regions: {:?}", memory_regions.len());
             println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
 
-            if (snapshot_result == Err(GenericOSErrors::GenericFail)) || (snapshot_result == Ok(0))
+            if (snapshot_result == Err(GenericOSErrors::GenericFail)) || (snapshot_result.unwrap().regions_read == 0)
             {
-                // This shopuld happen at all with the workload calculation
+                // This should not happen at all with the workload calculation
                 assert!(false);
             }
 
@@ -1059,6 +1167,8 @@ mod tests
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
 
+        let stop_on_error: bool = false;
+
         let snapshot_workload = GenericProcess::get_snapshot_workload(&memory_regions[0..], buffer.len());
 
         assert_eq!(Err(GenericOSErrors::SnapshotBufferIsTooSmall), snapshot_workload);
@@ -1097,13 +1207,15 @@ mod tests
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
 
-        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..]);
+        let stop_on_error: bool = false;
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..], stop_on_error);
 
         println!("Memory regions: {:?}", memory_regions);
         println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
 
         // Did it succeed?
-        assert_eq!(snapshot_result, Ok(1));
+        assert_eq!(snapshot_result.unwrap().regions_copied.len(), 1);
 
         // Was the buffer written?
         let mut expect: Vec<u8> = vec![];
