@@ -343,8 +343,6 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
         // No
         eprintln!("Error from read. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         eprintln!("Page: {:#?}", (format!("{:#01$X}", absolute_vm_address, size_of::<usize>() * 2 + 2), buffer.len(), transfered_bytes));
-        buffer.fill(0);
-        //return Ok(());
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
