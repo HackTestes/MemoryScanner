@@ -349,66 +349,6 @@ impl GenericProcess
         };
     }
 
-    /*
-    // Builds a snapshot of the process memory based on certain regions and buffer size
-    // On seccess, it returns the amount of regions that were copied to the buffer, so the caller can ajust the parameters and retry the copy with the remaining regions
-    // _bounded: it respects the limit of the buffer
-    pub fn snapshot_bounded(&self, target_mem_regions: &[GenericMemoryRegion], buffer: &mut [u8]) -> Result<usize, GenericOSErrors>
-    {
-        let mut copies_done: usize = 0;
-        let max_space = buffer.len();
-        let mut space_used: usize = 0;
-
-        for region in target_mem_regions
-        {
-            // Does it fit in the remaining space?
-            if region.size_bytes + space_used <= max_space
-            {
-                // Yes, then make the copy
-                // Offset the buffer by the spaced used by the other copies
-                let result = self.read_from_vm(region.base_address, &mut buffer[space_used..(space_used+region.size_bytes)]);
-
-                match result
-                {
-                    Ok(_) => (),
-                    Err(error) => {
-                        eprintln!("Page that caused an an error: {:#?}", region);
-                        return Err(error);
-                    }
-                };
-
-                // Update the control info
-                copies_done += 1;
-                space_used += region.size_bytes;
-            }
-
-            // The page goes out of range, no need to continue the loop
-            else
-            {
-                break;
-            }
-        }
-
-        // Check for regions too big that no copy was done
-        if (target_mem_regions.len() != 0) && (copies_done == 0)
-        {
-            return Err(GenericOSErrors::SnapshotBufferIsTooSmall);
-        }
-
-        // DEGUG ONLY
-        #[cfg(debug_print = "GOSI_snapshot_bounded")]
-        {
-            println!("Snapshot");
-            println!("Copies done: {}", copies_done);
-            println!("Space used / max size: {} / {}", space_used, max_space);
-            println!("Regions copied: {:#?}", target_mem_regions[..copies_done].to_vec());
-            println!("\n\n");
-        }
-
-        return Ok(copies_done);
-    }
-    */
-
     // Builds a snapshot of the process memory based on certain regions and buffer size
     // On seccess, it returns the regions that were copied, the ones that could not be copied and how many copies were considered
     // Return:
