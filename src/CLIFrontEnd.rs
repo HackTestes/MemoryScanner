@@ -268,6 +268,7 @@ pub fn print_CLI_help()
 
     output.push_str("OPTIONS\n");
     output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::Help::long_option, Options::Help::short_option, Options::Help::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::Threads::long_option, Options::Threads::short_option, Options::Threads::params.join(" "), Options::Threads::description).as_str());
     output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::ThreadStorage::long_option, Options::ThreadStorage::short_option, Options::ThreadStorage::params.join(" "), Options::ThreadStorage::description).as_str());
     output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::CopyBufferSize::long_option, Options::CopyBufferSize::short_option, Options::CopyBufferSize::params.join(" "), Options::CopyBufferSize::description).as_str());
     output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::TargetType::long_option, Options::TargetType::short_option, Options::TargetType::params.join(" "), Options::TargetType::description).as_str());
@@ -759,6 +760,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     {
         if configuration.operations.len() == 0
         {
+            eprintln!("There are no comparator operations");
             return Err(CommandParsingError::NotEnoughOperations);
         }
 
