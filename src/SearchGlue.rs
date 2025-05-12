@@ -776,6 +776,206 @@ mod tests
     }
 
     #[test]
+    fn TestGetOriginalPagesFromAjustedOnes_RegularCase()
+    {
+        let original_memory_regions = vec![
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            1000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            2000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            3000,
+            1000),
+        ];
+
+        let matches_obj = vec![
+            AddressMatches::new(original_memory_regions[0].clone(), vec![100, 996] ),
+            AddressMatches::new(original_memory_regions[1].clone(), vec![500] ),
+            AddressMatches::new(original_memory_regions[2].clone(), vec![150] ),
+            AddressMatches::new(original_memory_regions[3].clone(), vec![990] ),
+        ];
+
+        // 4 byte long target
+        let ajusted_pages = ajust_pages_min_max(&matches_obj, size_of::<u32>()).unwrap();
+        println!("{:?}", ajusted_pages);
+
+        // Make sure that the ajusted pages are different from the original ones, so we are sure that the pages did change from the ajustments
+        assert_ne!(ajusted_pages, original_memory_regions);
+
+        let original_from_ajusted_pages = ajusted_page_to_original(&ajusted_pages, &original_memory_regions).unwrap();
+
+        assert_eq!(original_memory_regions, original_from_ajusted_pages);
+    }
+
+    #[test]
+    fn TestGetOriginalPagesFromAjustedOnes_RegionWithNoResults()
+    {
+        let original_memory_regions = vec![
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            1000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            2000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            3000,
+            1000),
+        ];
+
+        // Omit one of the pages to simulate a region without any results
+        let matches_obj = vec![
+            AddressMatches::new(original_memory_regions[0].clone(), vec![100, 996] ),
+            AddressMatches::new(original_memory_regions[2].clone(), vec![150] ),
+            AddressMatches::new(original_memory_regions[3].clone(), vec![990] ),
+        ];
+
+        // 4 byte long target
+        let ajusted_pages = ajust_pages_min_max(&matches_obj, size_of::<u32>()).unwrap();
+        println!("{:?}", ajusted_pages);
+
+        // Make sure that the ajusted pages are different from the original ones, so we are sure that the pages did change from the ajustments
+        assert_ne!(ajusted_pages, original_memory_regions);
+
+        let original_from_ajusted_pages = ajusted_page_to_original(&ajusted_pages, &original_memory_regions).unwrap();
+
+        // It will skip one of the pages
+        assert_eq!(
+            vec![original_memory_regions[0].clone(), original_memory_regions[2].clone(), original_memory_regions[3].clone()],
+            original_from_ajusted_pages);
+    }
+
+    #[test]
+    fn TestGetOriginalPagesFromAjustedOnes_CannotFindPage_NotInTheOriginalVec()
+    {
+        let original_memory_regions = vec![
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            1000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            2000,
+            1000),
+        ];
+
+        let matches_obj = vec![
+            AddressMatches::new(original_memory_regions[0].clone(), vec![100, 996] ),
+            AddressMatches::new(original_memory_regions[1].clone(), vec![150] ),
+            AddressMatches::new(original_memory_regions[2].clone(), vec![990] ),
+
+            // Add a page that doesn't exist on the original vec, so it won't ever find it
+            AddressMatches::new(
+                GenericOSInterface::GenericMemoryRegion::new(
+                    GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+                    GenericOSInterface::GenericRegionState::Resident,
+                    3000,
+                    1000),
+                vec![990]
+            ),
+        ];
+
+        // 4 byte long target
+        let ajusted_pages = ajust_pages_min_max(&matches_obj, size_of::<u32>()).unwrap();
+        println!("{:?}", ajusted_pages);
+
+        // Make sure that the ajusted pages are different from the original ones, so we are sure that the pages did change from the ajustments
+        assert_ne!(ajusted_pages, original_memory_regions);
+
+        let original_from_ajusted_pages = ajusted_page_to_original(&ajusted_pages, &original_memory_regions);
+
+        assert_eq!(Err(SearchErrors::NoCorrespondingRegion_AjustedToOriginal), original_from_ajusted_pages);
+    }
+
+    #[test]
+    fn TestGetOriginalPagesFromAjustedOnes_CannotFindPage_OutOfOrder()
+    {
+        let original_memory_regions = vec![
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            0,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            1000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            2000,
+            1000),
+
+            GenericOSInterface::GenericMemoryRegion::new(
+            GenericOSInterface::PageProtection_Read|GenericOSInterface::PageProtection_Write,
+            GenericOSInterface::GenericRegionState::Resident,
+            3000,
+            1000),
+        ];
+
+        // Switch the first with the last
+        // This will case the other pages to never be found, since the search discards pages during the search
+        let matches_obj = vec![
+            AddressMatches::new(original_memory_regions[3].clone(), vec![100, 996] ),
+            AddressMatches::new(original_memory_regions[1].clone(), vec![150] ),
+            AddressMatches::new(original_memory_regions[2].clone(), vec![990] ),
+            AddressMatches::new(original_memory_regions[0].clone(), vec![990] ),
+        ];
+
+        // 4 byte long target
+        let ajusted_pages = ajust_pages_min_max(&matches_obj, size_of::<u32>()).unwrap();
+        println!("{:?}", ajusted_pages);
+
+        // Make sure that the ajusted pages are different from the original ones, so we are sure that the pages did change from the ajustments
+        assert_ne!(ajusted_pages, original_memory_regions);
+
+        let original_from_ajusted_pages = ajusted_page_to_original(&ajusted_pages, &original_memory_regions);
+
+        assert_eq!(Err(SearchErrors::NoCorrespondingRegion_AjustedToOriginal), original_from_ajusted_pages);
+    }
+
+    #[test]
     fn TestFilterRegionValidation_RegularCase()
     {
         let page_perms = PageProtection_Read|PageProtection_Write;
