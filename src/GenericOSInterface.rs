@@ -1165,4 +1165,111 @@ mod tests
         assert_eq!(buffer, expect);
     }
 
+    #[test]
+    fn TestSnapshotBounded_StopOnError()
+    {
+        let mut buffer: Vec<u8> = vec![0; 500];
+
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 200, 100),
+                    vec![]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 100),
+                    vec![3; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 100),
+                    vec![4; 100]),
+            ]
+        );
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let stop_on_error: bool = true;
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..], stop_on_error);
+
+        println!("Memory regions: {:?}", memory_regions);
+        println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+        // The copy operation should be interrupted, because of an error
+        assert_eq!(Err(GenericOSErrors::GenericFail), snapshot_result);
+    }
+
+    #[test]
+    fn TestSnapshotBounded_StopOnError_IgnoreErrors()
+    {
+        let mut buffer: Vec<u8> = vec![0; 500];
+
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let process = GenericProcess::create(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 200, 100),
+                    vec![]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 100),
+                    vec![3; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 100),
+                    vec![4; 100]),
+            ]
+        );
+
+        let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
+
+        let stop_on_error: bool = false;
+
+        let snapshot_result = process.snapshot_bounded(&memory_regions[0..], &mut buffer[0..], stop_on_error);
+
+        println!("Memory regions: {:?}", memory_regions);
+        println!("Op result {:?} - buffer: {:?}", snapshot_result, buffer.len());
+
+        // The copy operation should not be interrupted, because errors are ignored now
+        // Did it error? If not, continue
+        assert_ne!(Err(GenericOSErrors::GenericFail), snapshot_result);
+
+        let snapshot_unwrapped = snapshot_result.unwrap();
+
+        // Did we get the right copied regions? Did it skip the failure?
+        assert_eq!(
+            vec![
+                GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 100),
+                GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 100),
+            ], 
+            snapshot_unwrapped.regions_copied);
+
+
+        // Did it return the errored region?
+        assert_eq!(
+            vec![
+                GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 200, 100),
+            ], 
+            snapshot_unwrapped.regions_with_read_errors);
+
+        // Is the number of pages read correct?
+        assert_eq!(snapshot_unwrapped.regions_read, (snapshot_unwrapped.regions_copied.len()+snapshot_unwrapped.regions_with_read_errors.len()) );
+    }
+
 }
