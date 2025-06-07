@@ -19,6 +19,7 @@ mod ResultMergerHelpers;
 mod SearchRoutines;
 mod CLIFrontEnd;
 mod Configuration;
+mod CodeInjectionFileParsing;
 
 fn GetNumberOfMatches(all_matches: &Vec<Matches::AddressMatches>) -> usize
 {
