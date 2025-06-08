@@ -33,6 +33,7 @@ instruction = 0xAAAA9090, range = 0:2, matches_allowed = 0 // Sometimes we just 
 */
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum InjectionFileParsingErrors
 {
     // Failure during entry parsing
@@ -40,13 +41,13 @@ pub enum InjectionFileParsingErrors
     EntryParsingError_InvalidParameter, // Let's say, an incompatible type
     EntryParsingError_InvalidRange,
     EntryParsingError_InvalidRangeValue, // Valid range format, but it uses letters or negative values
-    EntryParsingError_InstructionMissingBytes, // 0x9 instead of 0x90
-    EntryParsingError_MissingField,
+    EntryParsingError_InvalidRange_MissingPair,
     EntryParsingError_MissingKeyValuePair,
     EntryParsingError_NotAHex,
-    EntryParsingError_OddInstruction,
+    EntryParsingError_OddInstruction, // 0x9 instead of 0x90
     EntryParsingError_InvalidHexInstruction,
     EntryParsingError_EmptyInstruction,
+    EntryParsingError_EmptyMatches,
     EntryParsingError_UnknownSearchType,
 
     // Error for duplicated input
@@ -69,11 +70,12 @@ pub enum SearchType
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 struct InjectionEntry
 {
     pub instruction: Vec<u8>,
     pub range: Option<(usize, usize)>,
-    pub matches_allowed: usize
+    pub matches_allowed: Option<usize>
 }
 
 impl InjectionEntry
@@ -84,7 +86,7 @@ impl InjectionEntry
         {
             instruction: input_instruction,
             range: input_range,
-            matches_allowed: input_matches_allowed
+            matches_allowed: Some(input_matches_allowed)
         };
     }
 
@@ -94,12 +96,13 @@ impl InjectionEntry
         {
             instruction: vec![],
             range: None,
-            matches_allowed: 0
+            matches_allowed: None
         };
     }
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 struct InjectionConfiguration
 {
     pub search_type: Option<SearchType>,
@@ -109,7 +112,17 @@ struct InjectionConfiguration
 
 impl InjectionConfiguration
 {
-    pub fn new() -> InjectionConfiguration
+    pub fn new(search_type_input: Option<SearchType>, module_name_input: Option<String>, instructions_input: Vec<InjectionEntry>) -> InjectionConfiguration
+    {
+        return InjectionConfiguration
+        {
+            search_type: search_type_input,
+            module_name: module_name_input,
+            instructions: instructions_input
+        };
+    }
+
+    pub fn empty() -> InjectionConfiguration
     {
         return InjectionConfiguration
         {
@@ -238,6 +251,12 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 // Enable the injection flag
                 is_injection_entry = true;
 
+                if injection_entry.instruction.len() != 0
+                {
+                    eprintln!("Error on line {} - Duplicated instruction: {}", line_num, value);
+                    return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
+                }
+
                 // Check if is a hex value
                 if value[0..2] != *"0x"
                 {
@@ -271,12 +290,18 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 // Enable the injection flag
                 is_injection_entry = true;
 
+                if injection_entry.range != None
+                {
+                    eprintln!("Error on line {} - Duplicated range: {}", line_num, value);
+                    return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
+                }
+
                 let range_items: Vec<&str> = value.split(":").collect();
 
                 if range_items.len() != 2
                 {
-                    eprintln!("Error on line {} - Invalid range parameter: {}", line_num, value);
-                    return Err(InjectionFileParsingErrors::EntryParsingError_InvalidRange);
+                    eprintln!("Error on line {} - Invalid range parameter (missing pair \"start:size\"): {}", line_num, value);
+                    return Err(InjectionFileParsingErrors::EntryParsingError_InvalidRange_MissingPair);
                 }
 
                 let start_string = range_items[0].trim();
@@ -314,11 +339,17 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 // Enable the injection flag
                 is_injection_entry = true;
 
+                if injection_entry.matches_allowed != None
+                {
+                    eprintln!("Error on line {} - Duplicated allowed matches: {}", line_num, value);
+                    return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
+                }
+
                 // Is the value a valid number? 
                 if value.parse::<usize>().is_ok()
                 {
                     // Yes, then store it
-                    injection_entry.matches_allowed = value.parse::<usize>().unwrap();
+                    injection_entry.matches_allowed = Some(value.parse::<usize>().unwrap());
                 }
                 else
                 {
@@ -347,6 +378,12 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
             return Err(InjectionFileParsingErrors::EntryParsingError_EmptyInstruction);
         }
 
+        if injection_entry.matches_allowed == None
+        {
+            eprintln!("Error on line {} - Empty allowed matches", line_num);
+            return Err(InjectionFileParsingErrors::EntryParsingError_EmptyMatches);
+        }
+
         injection_config.instructions.push( injection_entry );
     }
 
@@ -357,7 +394,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
 fn parse_injection_file(injection_file_contents: String) -> Result<InjectionConfiguration, InjectionFileParsingErrors>
 {
     // Start with an empty config. We will change it during the parsing process
-    let mut injection_config = InjectionConfiguration::new();
+    let mut injection_config = InjectionConfiguration::empty();
 
     // Get each line
     let lines: Vec<&str> = injection_file_contents.split("\n").collect();
@@ -438,10 +475,406 @@ instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 // Replace the first 
 
     ";
 
+    const example_test_RegularCase_ExeMemory: &str = "    
+    
+// Comments are just like in Rust
+
+// module: takes the name of a file (.elf, .exe, .dll, .so) and look for its content in memory
+// exe_memory: searches in all executable memory (useful for programs that do JIT code - .NET, JS, Python...)
+search_type = exe_memory
+
+// Entries
+instruction = 0x9090, matches_allowed = 1 // Search and replace the entirety of the instruction
+instruction = 0x90909090, range = 0:2, matches_allowed = 1 // Search for this instruction, but only replace a range (start position:length in bytes)
+instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 // Replace the first 2 bytes (\"0xAAAA\")
+
+    ";
+
     #[test]
     fn InjectionFileParsing_RegularCase()
     {
-        println!("{:?}", parse_injection_file(example_test_RegularCase.to_string()));
-        assert_eq!(true, false);
+        let parsing_result = parse_injection_file(example_test_RegularCase.to_string()).unwrap();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionConfiguration::new(
+            Some(SearchType::module_name),
+            Some("something.exe".to_string()),
+            vec![
+                InjectionEntry::new( vec![0x90, 0x90], None, 1 ),
+                InjectionEntry::new( vec![0x90, 0x90, 0x90, 0x90], Some((0, 2)), 1 ),
+                InjectionEntry::new( vec![0xAA, 0xAA, 0x90, 0x90], Some((0, 2)), 1 ),
+            ]
+        );
+        assert_eq!(expect, parsing_result);
+    }
+
+    #[test]
+    fn InjectionFileParsing_RegularCase_ExeMemory()
+    {
+        let parsing_result = parse_injection_file(example_test_RegularCase_ExeMemory.to_string()).unwrap();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionConfiguration::new(
+            Some(SearchType::exe_memory),
+            None,
+            vec![
+                InjectionEntry::new( vec![0x90, 0x90], None, 1 ),
+                InjectionEntry::new( vec![0x90, 0x90, 0x90, 0x90], Some((0, 2)), 1 ),
+                InjectionEntry::new( vec![0xAA, 0xAA, 0x90, 0x90], Some((0, 2)), 1 ),
+            ]
+        );
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_UnknownSearchType: &str = "        
+search_type = not_a_valid_search_type
+
+instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_UnknownSearchType()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_UnknownSearchType.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_UnknownSearchType;
+        assert_eq!(expect, parsing_result);
+    }
+
+
+    const example_test_ValidationError_NoSearch: &str = "        
+instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_NoSearchType()
+    {
+        let parsing_result = parse_injection_file(example_test_ValidationError_NoSearch.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::ValidationError_NoSearchType;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_ValidationError_NoModuleName: &str = "   
+search_type = module
+instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_NoModuleName()
+    {
+        let parsing_result = parse_injection_file(example_test_ValidationError_NoModuleName.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::ValidationError_NoModuleName;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_ValidationError_NoInstructions: &str = "   
+search_type = module
+module_name = hello.exe
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_NoInstructions()
+    {
+        let parsing_result = parse_injection_file(example_test_ValidationError_NoInstructions.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::ValidationError_NoInstructions;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_UnknownFiled: &str = "   
+search_type = module
+module_name = hello.exe
+not_a_valid_field = 10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_UnknownFiled()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_UnknownFiled.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_UnknownFiled;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_MissingKeyValuePair: &str = "   
+search_type = module
+module_name = hello.exe
+instruction
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_MissingKeyValuePair()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_MissingKeyValuePair.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_MissingKeyValuePair;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidHex: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0xZZZZ, matches_allowed = 1 
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidHex()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidHex.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidHexInstruction;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_NotAHex: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = this_is_not_a_hex_value, matches_allowed = 1 
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_NotAHex()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_NotAHex.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_NotAHex;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_OddHex: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x909, matches_allowed = 1 
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_OddHex()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_OddHex.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_OddInstruction;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidRange: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 1, range = 0:0
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidRange()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidRange.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidRange_negative_start: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 1, range = -1:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidRange_Negative_Start()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidRange_negative_start.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidRange_negative_end: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 1, range = 1:-10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidRange_Negative_End()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidRange_negative_end.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidRange_missing_value_pair: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 1, range = 99
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidRange_MissingPair()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidRange_missing_value_pair.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidRange_MissingPair;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidRange_letters: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 1, range = AA:AA
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidRange_Letters()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidRange_letters.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_InvalidParameter: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = A, range = 0:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_InvalidParameter()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_InvalidParameter.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_InvalidParameter;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_EmptyMatches: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, range = 0:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_EmptyMatches()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_EmptyMatches.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_EmptyMatches;
+        assert_eq!(expect, parsing_result);
+    }
+
+    // Duplicate input
+
+    const example_test_EntryParsingError_Duplicate_SearchType: &str = "   
+search_type = module
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, range = 0:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_Duplicate_SearchType()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_Duplicate_SearchType.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_Duplicates;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_Duplicate_ModuleName: &str = "   
+search_type = module
+module_name = hello.exe
+module_name = hello.exe
+instruction = 0x9090, range = 0:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_Duplicate_ModuleName()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_Duplicate_ModuleName.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_Duplicates;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_Duplicate_Instruction: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, instruction = 0xAAAA, range = 0:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_Duplicate_Instruction()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_Duplicate_Instruction.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_Duplicates;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_Duplicate_Matches: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 2, matches_allowed = 3, range = 0:10
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_Duplicate_Matches()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_Duplicate_Matches.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_Duplicates;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_Duplicate_Range: &str = "   
+search_type = module
+module_name = hello.exe
+instruction = 0x9090, matches_allowed = 2, range = 0:10, range = 0:13
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_Duplicate_Range()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_Duplicate_Range.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_Duplicates;
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_EntryParsingError_Mixing: &str = "   
+search_type = module
+instruction = 0x9090, matches_allowed = 2, range = 0:10, module_name = hello.exe
+    ";
+
+    #[test]
+    fn InjectionFileParsing_Error_Mixing()
+    {
+        let parsing_result = parse_injection_file(example_test_EntryParsingError_Mixing.to_string()).unwrap_err();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionFileParsingErrors::EntryParsingError_MixingEntryTypes;
+        assert_eq!(expect, parsing_result);
     }
 }
