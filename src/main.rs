@@ -15,7 +15,6 @@ use std::time::Duration;
 use std::thread;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-mod Config;
 mod ThreadPool;
 mod WorkloadPartitioning;
 mod SearchEngines;

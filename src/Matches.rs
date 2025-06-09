@@ -94,7 +94,6 @@ impl AddressMatches
 
         // Addresses
         // Get absolute addresses
-        let absulute_addresses = self.get_absolute_addresses();
         let mut addresses_string: String = "".to_string();
 
         // Select display style: hex, decimal

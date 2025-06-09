@@ -493,7 +493,7 @@ mod tests
     #[test]
     fn TestPoolArgsLeak()
     {
-        use::std::time;
+        //use::std::time;
         {
             let mut thread_pool = ThreadPool::<Vec<u8>, i32>::new(1).unwrap();
 
@@ -521,7 +521,7 @@ mod tests
     #[test]
     fn TestPoolReturnLeak()
     {
-        use::std::time;
+        //use::std::time;
         {
             let mut thread_pool = ThreadPool::<i32, Vec<u8>>::new(1).unwrap();
 
@@ -548,7 +548,7 @@ mod tests
     #[test]
     fn TestPoolCreationLeak()
     {
-        use::std::time;
+        //use::std::time;
         {
             fn task(arg: i32) -> i32
             { 
@@ -713,11 +713,11 @@ mod tests
         let mut thread_pool = ThreadPool::<i32, i32>::new(1).unwrap();
 
         // The first run should be ok
-        assert_eq!(Ok(()), thread_pool.execute(0, (1), task));
+        assert_eq!(Ok(()), thread_pool.execute(0, 1, task));
 
 
         // Since I did not get the results back, the second run should fail
-        assert_eq!(Err(TPErrors::ThreadAlreadyHasATask), thread_pool.execute(0, (1), task));
+        assert_eq!(Err(TPErrors::ThreadAlreadyHasATask), thread_pool.execute(0, 1, task));
     }
 
     /*#[test]

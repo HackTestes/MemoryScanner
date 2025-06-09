@@ -1,7 +1,7 @@
 // Bring the generic inteface so we can translate specific to generic
 use crate::GenericOSInterface;
 
-use std::os::raw::c_void;
+
 
 // Testing dummies
 // Since the OS APIs need to interface with another process, they become quite hard to test automatically

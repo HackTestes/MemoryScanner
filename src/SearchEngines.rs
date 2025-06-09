@@ -51,7 +51,7 @@ macro_rules! SelectCompareValues
             ComparisonOperation::GreaterOrEqual => $value_to_check >= $target_value,
             ComparisonOperation::LessOrEqual => $value_to_check <= $target_value
             //_ => panic!("No comparison operation!")
-        };
+        }
     }
 }
 
@@ -253,7 +253,6 @@ mod tests
 
         // Create and insert needle
         let needle: f32 = 15.0;
-        let needle_size_bytes: usize = size_of::<f32>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -287,7 +286,6 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -318,7 +316,6 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -349,7 +346,6 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -380,7 +376,6 @@ mod tests
 
         // Create and insert needle
         let mut needle: u8 = 25;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -419,7 +414,6 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 9;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -450,7 +444,6 @@ mod tests
 
         // Create and insert needle
         let mut needle: u8 = 9;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -489,7 +482,6 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u8>();
         let mut insert_pos = 25;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -519,7 +511,6 @@ mod tests
         let mut buffer: Vec<u8> = vec![0; buffer_size];
 
         // Create and insert needle
-        let needle_size_bytes: usize = size_of::<u32>();
         buffer[25] = 1;
         buffer[26] = 1;
         buffer[27] = 1;
@@ -547,7 +538,6 @@ mod tests
 
         // Create and insert needle
         let needle: u32 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
         let mut insert_pos = 46;
         for needle_byte in needle.to_ne_bytes()
         {
@@ -578,8 +568,7 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
-        let mut insert_pos = 49;
+        let insert_pos = 49;
         buffer[insert_pos] = needle;
 
         // Print the current state of the buffer
@@ -605,8 +594,7 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
-        let mut insert_pos = 47;
+        let insert_pos = 47;
 
         // It shouldn't be able to read this needle
         buffer[insert_pos] = needle;
@@ -633,8 +621,7 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
-        let mut insert_pos = 25;
+        let insert_pos = 25;
 
         // It shouldn't be able to read this needle
         buffer[insert_pos] = needle;
@@ -663,8 +650,7 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
-        let mut insert_pos = 30;
+        let insert_pos = 30;
 
         buffer[insert_pos] = needle;
 
@@ -696,8 +682,7 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
-        let mut insert_pos = 25;
+        let insert_pos = 25;
 
         buffer[insert_pos] = needle;
 
@@ -729,7 +714,6 @@ mod tests
 
         // Create and insert needle
         let needle: u8 = 15;
-        let needle_size_bytes: usize = size_of::<u32>();
 
         buffer[25] = needle;
         buffer[30] = needle;

@@ -520,7 +520,7 @@ impl GenericProcess
             let region = &target_mem_regions[region_idx];
 
             // Does it fit in the remaining space?
-            if (region.size_bytes + space_used <= buffer_size)
+            if region.size_bytes + space_used <= buffer_size
             {
                 // Yes
                 // Only add fresh copies
@@ -601,7 +601,7 @@ mod tests
         let mut state = false;
 
         {
-            let tracker = process.tracked_pause_test(&mut state).unwrap();
+            let _tracker = process.tracked_pause_test(&mut state).unwrap();
         }
 
         // Was it resumed after Drop? Did the tracker called resume?
@@ -1101,13 +1101,11 @@ mod tests
     fn TestProcessSnapshotIterFail()
     {
         // Start a zeroed buffer of 100 items
-        let mut buffer: Vec<u8> = vec![0; 10];
+        let buffer: Vec<u8> = vec![0; 10];
 
         let process = GenericProcess::attach(1).unwrap();
 
         let memory_regions = process.get_mem_regions_info(PageProtection_NoAccess, None, None).unwrap();
-
-        let stop_on_error: bool = false;
 
         let snapshot_workload = GenericProcess::get_snapshot_workload(&memory_regions[0..], buffer.len());
 

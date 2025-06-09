@@ -7,7 +7,6 @@ use crate::ResultMergerHelpers;
 use crate::SearchRoutines;
 use std::sync::Arc;
 use std::mem::size_of;
-use std::mem;
 use std::time;
 use std::collections::HashMap;
 
@@ -240,7 +239,7 @@ fn ajusted_page_to_original(ajusted_mem_regions: &[GenericOSInterface::GenericMe
         // Track whether this loop wasn't able to find the original page 
         let mut found_match: bool = false;
 
-        while (original_index < original_memory_regions.len())
+        while original_index < original_memory_regions.len()
         {
             let original_region: GenericOSInterface::GenericMemoryRegion = original_memory_regions[ original_index ].clone();
 
@@ -586,7 +585,6 @@ mod tests
     fn TestMatches_Time()
     {
         use std::time;
-        use std::cmp;
 
         let mut vector: Vec<u8> = vec![0; 1000000000];
         let vec_last = vector.len()-1;

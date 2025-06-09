@@ -6,12 +6,9 @@ use std::os::raw::c_void;
 // Windows specific interfaces
 #[cfg(target_os = "windows")]
 use windows_sys::{
-    Win32::System::Threading::*, Win32::Foundation::*,
-    Win32::System::Memory::*, core::*,
+    Win32::System::Memory::*,
     Win32::System::Diagnostics::Debug::WriteProcessMemory,
-    Win32::System::Diagnostics::Debug::ReadProcessMemory,
-    Win32::Foundation::HANDLE,
-    Win32::Foundation::GetLastError
+    Win32::System::Diagnostics::Debug::ReadProcessMemory
 };
 
 #[cfg(target_os = "windows")]
