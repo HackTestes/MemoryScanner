@@ -187,7 +187,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
         // Check for key value pairs
         if items.len() != 2
         {
-            eprintln!("Error on line {} - Missing key value pair: {}", line_num, field);
+            eprintln!("Error on line {} - Missing key value pair: \"{}\"", line_num, field);
             return Err(InjectionFileParsingErrors::EntryParsingError_MissingKeyValuePair);
         }
 
@@ -203,13 +203,13 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 // For when we mix different types of things in the same line
                 if is_injection_entry == true
                 {
-                    eprintln!("Error on line {} - Mixing entry types on the same line: {}", line_num, value);
+                    eprintln!("Error on line {} - Mixing entry types on the same line: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_MixingEntryTypes); 
                 }
 
                 if injection_config.search_type != None
                 {
-                    eprintln!("Error on line {} - Duplicated search type: {}", line_num, value);
+                    eprintln!("Error on line {} - Duplicated search type: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
                 }
 
@@ -218,7 +218,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                     "module" => { injection_config.search_type = Some(SearchType::module_name); },
                     "exe_memory" => { injection_config.search_type = Some(SearchType::exe_memory); },
                     _ => {
-                        eprintln!("Error on line {} - Unknown search type: {}", line_num, value);
+                        eprintln!("Error on line {} - Unknown search type: \"{}\"", line_num, value);
                         return Err(InjectionFileParsingErrors::EntryParsingError_UnknownSearchType);
                     }
                 }
@@ -232,14 +232,14 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 // We can only store this value if the was no previous one
                 if injection_config.module_name != None
                 {
-                    eprintln!("Error on line {} - Duplicated module name: {}", line_num, value);
+                    eprintln!("Error on line {} - Duplicated module name: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
                 }
 
                 // Or if we are mixing things
                 if is_injection_entry == true
                 {
-                    eprintln!("Error on line {} - Mixing entry types on the same line: {}", line_num, value);
+                    eprintln!("Error on line {} - Mixing entry types on the same line: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_MixingEntryTypes); 
                 }
 
@@ -253,14 +253,14 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
 
                 if injection_entry.instruction.len() != 0
                 {
-                    eprintln!("Error on line {} - Duplicated instruction: {}", line_num, value);
+                    eprintln!("Error on line {} - Duplicated instruction: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
                 }
 
                 // Check if is a hex value
                 if value[0..2] != *"0x"
                 {
-                    eprintln!("Error on line {} - Not on the hex format (0x...): {}", line_num, value);
+                    eprintln!("Error on line {} - Not on the hex format (0x...): \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_NotAHex);
                 }
  
@@ -268,14 +268,14 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 let pure_hex = &value[2..];
                 if pure_hex.len() % 2 != 0
                 {
-                    eprintln!("Error on line {} - Invalid Hex instruction (odd number): {}", line_num, value);
+                    eprintln!("Error on line {} - Invalid Hex instruction (odd number): \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_OddInstruction);
                 }
 
                 // Can we decode it?
                 if decode_hex(&pure_hex).is_err()
                 {
-                    eprintln!("Error on line {} - Invalid Hex instruction: {}", line_num, value);
+                    eprintln!("Error on line {} - Invalid Hex instruction: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_InvalidHexInstruction);
                 }
                 
@@ -292,7 +292,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
 
                 if injection_entry.range != None
                 {
-                    eprintln!("Error on line {} - Duplicated range: {}", line_num, value);
+                    eprintln!("Error on line {} - Duplicated range: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
                 }
 
@@ -300,7 +300,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
 
                 if range_items.len() != 2
                 {
-                    eprintln!("Error on line {} - Invalid range parameter (missing pair \"start:size\"): {}", line_num, value);
+                    eprintln!("Error on line {} - Invalid range parameter (missing pair \"start:size\"): \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_InvalidRange_MissingPair);
                 }
 
@@ -309,13 +309,13 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
 
                 if start_string.parse::<usize>().is_err()
                 {
-                    eprintln!("Error on line {} - Invalid range start: {}", line_num, start_string);
+                    eprintln!("Error on line {} - Invalid range start: \"{}\"", line_num, start_string);
                     return Err(InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue);
                 }
 
                 if size_string.parse::<usize>().is_err()
                 {
-                    eprintln!("Error on line {} - Invalid range size: {}", line_num, size_string);
+                    eprintln!("Error on line {} - Invalid range size: \"{}\"", line_num, size_string);
                     return Err(InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue);
                 }
 
@@ -325,7 +325,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 // The size cannot be zero, it does not make sense to replace 0 bytes of code
                 if size == 0
                 {
-                    eprintln!("Error on line {} - Invalid range size (it cannot be zero): {}", line_num, size);
+                    eprintln!("Error on line {} - Invalid range size (it cannot be zero): \"{}\"", line_num, size);
                     return Err(InjectionFileParsingErrors::EntryParsingError_InvalidRangeValue);
                 }
 
@@ -341,7 +341,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
 
                 if injection_entry.matches_allowed != None
                 {
-                    eprintln!("Error on line {} - Duplicated allowed matches: {}", line_num, value);
+                    eprintln!("Error on line {} - Duplicated allowed matches: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_Duplicates); 
                 }
 
@@ -353,13 +353,13 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
                 }
                 else
                 {
-                    eprintln!("Error on line {} - Invalid matches allowed number: {}", line_num, value);
+                    eprintln!("Error on line {} - Invalid matches allowed number: \"{}\"", line_num, value);
                     return Err(InjectionFileParsingErrors::EntryParsingError_InvalidParameter);
                 }
             },
 
             _ => {
-                eprintln!("Error on line {} - Unknown field: {}", line_num, key);
+                eprintln!("Error on line {} - Unknown field: \"{}\"", line_num, key);
                 return Err(InjectionFileParsingErrors::EntryParsingError_UnknownFiled);
             },
         }
@@ -499,6 +499,34 @@ instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 // Replace the first 
         let expect = InjectionConfiguration::new(
             Some(SearchType::module_name),
             Some("something.exe".to_string()),
+            vec![
+                InjectionEntry::new( vec![0x90, 0x90], None, 1 ),
+                InjectionEntry::new( vec![0x90, 0x90, 0x90, 0x90], Some((0, 2)), 1 ),
+                InjectionEntry::new( vec![0xAA, 0xAA, 0x90, 0x90], Some((0, 2)), 1 ),
+            ]
+        );
+        assert_eq!(expect, parsing_result);
+    }
+
+    const example_test_RegularCase_ModuleNameWithSpaces: &str = "    
+search_type = module
+module_name = A name with spaces.exe
+
+instruction = 0x9090, matches_allowed = 1 // Search and replace the entirety of the instruction
+instruction = 0x90909090, range = 0:2, matches_allowed = 1 // Search for this instruction, but only replace a range (start position:length in bytes)
+instruction = 0xAAAA9090, range = 0:2, matches_allowed = 1 // Replace the first 2 bytes (\"0xAAAA\")
+
+    ";
+
+    #[test]
+    fn InjectionFileParsing_ModuleNameWithSpaces()
+    {
+        let parsing_result = parse_injection_file(example_test_RegularCase_ModuleNameWithSpaces.to_string()).unwrap();
+        println!("{:?}", parsing_result);
+
+        let expect = InjectionConfiguration::new(
+            Some(SearchType::module_name),
+            Some("A name with spaces.exe".to_string()),
             vec![
                 InjectionEntry::new( vec![0x90, 0x90], None, 1 ),
                 InjectionEntry::new( vec![0x90, 0x90, 0x90, 0x90], Some((0, 2)), 1 ),
