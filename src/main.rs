@@ -1,3 +1,12 @@
+//Disable some style warnings
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)] 
+#![allow(non_snake_case)]
+#![allow(unexpected_cfgs)]
+
+// Treat all warinings as errors
+//#![deny(warnings)]
+
 use std::env;
 use std::io;
 use std::io::Write;
