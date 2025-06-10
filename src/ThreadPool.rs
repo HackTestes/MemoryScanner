@@ -205,7 +205,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
         // Thread list - holds the handles to each thread
         let mut new_thread_list: Vec< ThreadTP<ARGS, RETURN_STRUCT> > = Vec::new();
 
-        for idx in 0..num_threads
+        for _idx in 0..num_threads
         {
             // Thread - contains general information about the thread
             let mut thread = ThreadTP::<ARGS, RETURN_STRUCT>::new();
@@ -395,7 +395,7 @@ mod tests
         fn task(arg: (i32, i32)) -> i32
         {
             // You can unpack the args struct inside of the function
-            let (arg1, arg2) = arg; 
+            let (_arg1, arg2) = arg; 
             println!("Hello from task! Args: {:?}", arg);
             return arg2;
         }
@@ -489,6 +489,7 @@ mod tests
 
     // The goal of this test was to verify if the arguments passed to the threads would leak any memory (because of the static lifetime requirement)
     // It did not showed any signs of leak
+    #[allow(unreachable_code)]
     #[ignore]
     #[test]
     fn TestPoolArgsLeak()
@@ -497,7 +498,7 @@ mod tests
         {
             let mut thread_pool = ThreadPool::<Vec<u8>, i32>::new(1).unwrap();
 
-            fn task(arg: Vec<u8>) -> i32
+            fn task(_arg: Vec<u8>) -> i32
             { 
                 return 0;
             }
@@ -507,7 +508,7 @@ mod tests
                 let vector: Vec<u8> = vec![1; 1*1024*1024];
 
                 let _ = thread_pool.execute(0 as usize, vector, task);
-                let all_results = thread_pool.wait_all();
+                let _all_results = thread_pool.wait_all();
             }
 
             //thread::sleep(time::Duration::from_millis(10000));
@@ -517,6 +518,7 @@ mod tests
 
     // The goal of this test was to verify if the return value passed by the threads would leak any memory (because of the static lifetime requirement)
     // It did not showed any signs of leak
+    #[allow(unreachable_code)]
     #[ignore]
     #[test]
     fn TestPoolReturnLeak()
@@ -525,7 +527,7 @@ mod tests
         {
             let mut thread_pool = ThreadPool::<i32, Vec<u8>>::new(1).unwrap();
 
-            fn task(arg: i32) -> Vec<u8>
+            fn task(_arg: i32) -> Vec<u8>
             { 
                 let vector: Vec<u8> = vec![1; 1*1024*1024];
                 return vector;
@@ -534,7 +536,7 @@ mod tests
             loop
             {
                 let _ = thread_pool.execute(0 as usize, 1, task);
-                let all_results = thread_pool.wait_all();
+                let _all_results = thread_pool.wait_all();
             }
 
             //thread::sleep(time::Duration::from_millis(10000));
@@ -544,6 +546,7 @@ mod tests
 
     // The goal of this test was to verify if the pool creation would leak any memory
     // It did not showed any signs of leak
+    #[allow(unreachable_code)]
     #[ignore]
     #[test]
     fn TestPoolCreationLeak()
@@ -559,7 +562,7 @@ mod tests
             {
                 let mut thread_pool = ThreadPool::<i32, i32>::new(1).unwrap();
                 let _ = thread_pool.execute(0 as usize, 1, task);
-                let all_results = thread_pool.wait_all();
+                let _all_results = thread_pool.wait_all();
             }
 
             //thread::sleep(time::Duration::from_millis(10000));
@@ -589,11 +592,12 @@ mod tests
             let mut thread_pool = ThreadPool::<(i32, i32, i32, i32), i32>::new(1).unwrap();
 
             // Thread pool cost measurement
+            #[allow(unused_mut)] // For the commented code below
             let mut now = time::Instant::now();
             for _ in 0..num_tasks
             {
                 let _ = thread_pool.execute(0 as usize, (1, 2, 3, 4), task);
-                let all_results = thread_pool.wait_all();
+                let _all_results = thread_pool.wait_all();
                 // Results aren't printed to avoid the cost of println in the measurements
             }
             let thread_pool_time_elapsed = now.elapsed().as_millis();
@@ -649,17 +653,18 @@ mod tests
     //      - I prefer to handle potential panics at the worker: it should be faster, as it avoids the round trip to main and easier to code
     // Any alternatives?
     //      - Not panic the main thread, let it recreate the whole pool and resend the task (sounds hard to use)
+    #[allow(unreachable_code)]
     #[test]
     #[should_panic]
     fn TestPanickingThreads()
     {
         let num_tasks: usize = 1;
 
-        fn task(arg: i32) -> i32
+        fn task(_arg: i32) -> i32
         {
             // Panic inside the thread
             panic!();
-            return arg;
+            return _arg;
         }
 
         let mut thread_pool = ThreadPool::<i32, i32>::new(2).unwrap();
@@ -758,16 +763,6 @@ mod tests
         assert!(false);
     }*/
 
-    fn test_input<T, U>(input: Vec<T>, task: fn(args: T) -> U) -> Vec<T>
-    {
-        for t_idx in 0..input.len()
-        {
-            continue;
-        }
-
-        vec![]
-    }
-
     #[test]
     fn TestThreadPool_ScopedThreads()
     {
@@ -778,9 +773,7 @@ mod tests
 
         let mut thread_pool = ThreadPool::<Vec<&u64>, ()>::new(8).unwrap();
 
-        let mut var_01: u64 = 0;
-        let mut var_02: u64 = 0;
-        let mut var_03: u64 = 0;
+        let var_01: u64 = 0;
 
         let mut input = vec![
             vec![&var_01, &(10 as u64)],
@@ -803,11 +796,9 @@ mod tests
 
         let mut thread_pool = ThreadPool::<(&u64, u64), ()>::new(8).unwrap();
 
-        let mut var_01 = 0;
-        let mut var_02 = 0;
-        let mut var_03 = 0;
+        let var_01 = 0;
 
-        let mut input = vec![
+        let input = vec![
             (&var_01, 10),
         ];
 

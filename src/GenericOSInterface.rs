@@ -185,7 +185,7 @@ impl Drop for PausedProcessTracker<'_, '_>
         if self.1 != None
         {
             // Get the reference to the object and then modify it, alerting the outer world
-            let mut state_ref: &mut bool = self.1.as_deref_mut().unwrap();
+            let state_ref: &mut bool = self.1.as_deref_mut().unwrap();
             *state_ref = !*state_ref;
         }
 
