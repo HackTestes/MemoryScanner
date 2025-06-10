@@ -168,6 +168,7 @@ pub fn iter_over_mem_regions(handle: OSSpecificHandle, process: &GenericOSInterf
 }
 
 
+#[allow(unused_variables)] // TODO: IMPROVE THE API
 #[cfg(test)]
 pub fn write_into_process_vm(process_handle: OSSpecificHandle, buffer: &[u8], absolute_vm_address: usize, process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
@@ -179,7 +180,7 @@ pub fn write_into_process_vm(process_handle: OSSpecificHandle, buffer: &[u8], ab
     return Ok(());
 }
 
-
+#[allow(unused_variables)] // TODO: IMPROVE THE API
 #[cfg(test)]
 pub fn read_from_process_vm(process_handle: OSSpecificHandle, absolute_vm_address: usize, buffer: &mut [u8], process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {

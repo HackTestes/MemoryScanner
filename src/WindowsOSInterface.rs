@@ -276,6 +276,7 @@ impl MemoryRegionIterator
 }
 
 // This is done so the caller inly needs to call one function to be able to iterate over mem regions
+#[allow(unused_variables)] // TODO: IMPROVE THE API
 #[cfg(target_os = "windows")]
 pub fn iter_over_mem_regions(handle: windows_sys::Win32::Foundation::HANDLE, process: &GenericOSInterface::GenericProcess) -> MemoryRegionIterator
 {
@@ -288,6 +289,7 @@ pub fn iter_over_mem_regions(handle: windows_sys::Win32::Foundation::HANDLE, pro
 }
 
 // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory
+#[allow(unused_variables)] // TODO: IMPROVE THE API
 #[cfg(target_os = "windows")]
 pub fn write_into_process_vm(process_handle: windows_sys::Win32::Foundation::HANDLE, buffer: &[u8], absolute_vm_address: usize, process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
@@ -314,6 +316,7 @@ pub fn write_into_process_vm(process_handle: windows_sys::Win32::Foundation::HAN
 }
 
 // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory
+#[allow(unused_variables)] // TODO: IMPROVE THE API
 #[cfg(target_os = "windows")]
 pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HANDLE, absolute_vm_address: usize, buffer: &mut [u8], process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
