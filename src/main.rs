@@ -110,7 +110,8 @@ fn engine_comparator_subroutine(command_config: Configuration::Config, mut resul
         if command_config.filter == false
         {
             // Since we are starting a new search, drop the current results immediately
-            results = vec![];
+            //results = vec![];
+            results.clear();
 
             return match command_config.target_type
             {
@@ -498,7 +499,7 @@ fn main()
                     SearchEngines::Engines::comparator =>
                     {
                         // Pause the process before interacting with it
-                        let pause_process_tracker = process_handle.tracked_pause();
+                        let _pause_process_tracker = process_handle.tracked_pause();
 
                         // I clone the value here because in case of errors it might not be initialized
                         // So this is a poor's man save, so the user doesn't lose its search
@@ -585,7 +586,8 @@ fn main()
                         loop
                         {
                             // write memory
-                            write_action_subroutine(&config_clone, &process_handle_arc_thread);
+                            // There is no error checking here, this means that any write error is ignored
+                            let _ = write_action_subroutine(&config_clone, &process_handle_arc_thread);
                 
                             // sleep
                             thread::sleep(millis);
@@ -607,7 +609,7 @@ fn main()
                     should_thread_stop.store(true, Ordering::Relaxed);
 
                     // Ignore errors here - but if something goes bad, crash loudly
-                    let res = thread_join_handle.join().unwrap();
+                    let _res = thread_join_handle.join().unwrap();
 
                     // Now take the handle back
                     process_handle = Arc::try_unwrap(process_handle_arc_main).unwrap();

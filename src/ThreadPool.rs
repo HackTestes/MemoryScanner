@@ -82,7 +82,8 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
         }
     }
 
-    // Borrow the args - read-only
+    // Borrow the args - read-only - never used
+    /*
     fn get_args(&self) -> Result<&ARGS, String>
     {
         match &self.arguments_struct
@@ -91,6 +92,7 @@ impl<ARGS, RETURN_STRUCT> TaskTP<ARGS, RETURN_STRUCT>
             None => Err("No arguments present".to_string()),
         }
     }
+    */
 
     // Takes ownsership of the arguments, consuming them (aka leaving None in the structure)
     // This is done so partial moving does not invalidate the whole object
@@ -142,7 +144,8 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
         };
     }
 
-    // Borrow thread handle - read-only
+    // Borrow thread handle - read-only - never used
+    /*
     fn get_handle(&self) -> &thread::JoinHandle<Result<(), String>>
     {
         match &self.handle
@@ -151,6 +154,7 @@ impl<ARGS, RETURN_STRUCT> ThreadTP<ARGS, RETURN_STRUCT>
             None => todo!(),
         }
     }
+    */
 
     // Takes ownsership of the receiver of the task queue, leaving None in the palce
     fn take_worker_task_receiver(&mut self) -> mpsc::Receiver< TaskTP<ARGS, RETURN_STRUCT>>
@@ -260,7 +264,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
         }
 
         // Sends a task to the thread
-        self.thread_list[thread_id].task_queue_sender.send( TaskTP::new(args, task) );
+        self.thread_list[thread_id].task_queue_sender.send( TaskTP::new(args, task) ).unwrap();
 
         // Keep track that it has been started by main
         self.thread_list[thread_id].assigned = true;
@@ -335,7 +339,7 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
             // Wake up all idle threads
             // Threads that have some work will continue to do so. When they finish, they will see a new task and exit
             // Also, we can safely ignore the assigned field
-            self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() );
+            self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() ).unwrap();
         }
     }
 }
@@ -405,7 +409,7 @@ mod tests
         {
             // The pool will execute the function passed as as pointer at the selected thread
             // Note that the ARGUMENTS type must match the one used at the creation of the pool
-            thread_pool.execute(idx, (idx as i32, (idx+1) as i32), task);
+            thread_pool.execute(idx, (idx as i32, (idx+1) as i32), task).unwrap();
         }
 
         // All results are collected at once
@@ -439,7 +443,7 @@ mod tests
             // Note that the ARGUMENTS type must match the one used at the creation of the pool
             // Now we will create a closure to adapt the interface and unpack the args before we cann the function
             // Note that Rust can infer the types
-            thread_pool.execute( idx, (idx as i32, (idx+1) as i32), |args| {task(args.0, args.1)} );
+            thread_pool.execute( idx, (idx as i32, (idx+1) as i32), |args| {task(args.0, args.1)} ).unwrap();
         }
 
         // All results are collected at once
@@ -473,7 +477,7 @@ mod tests
             // Only some threads will get work
             if idx % 2 == 0
             {
-                thread_pool.execute( idx, idx as i32, task );
+                thread_pool.execute( idx, idx as i32, task ).unwrap();
             }
         }
 
@@ -695,11 +699,6 @@ mod tests
     #[test]
     fn TestThreadPoolInvalidNumberOfThreadsError()
     {
-        fn task(arg: i32) -> i32
-        {
-            return arg;
-        }
-
         let thread_pool = ThreadPool::<i32, i32>::new(0);
 
         // err() -> Transforms the Result to an Option

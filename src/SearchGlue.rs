@@ -590,7 +590,7 @@ mod tests
         let vec_last = vector.len()-1;
         vector[ vec_last ] = 2;
 
-        let mut now = time::Instant::now();
+        let now = time::Instant::now();
 
         let min = vector.iter().max().unwrap();
 
@@ -601,7 +601,7 @@ mod tests
         println!("Time elapsed: {}us", time_elapsed.as_micros());
 
         // Fast unsafe
-        let mut now = time::Instant::now();
+        let now = time::Instant::now();
 
         let min = vector[vec_last];
 
@@ -1157,7 +1157,7 @@ mod tests
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), (50..51).collect()),
             ];
 
-        let mut filter_result = FilterSearchComparator(
+        let filter_result = FilterSearchComparator(
             expected_search_result,
             &process,
             3,
@@ -1186,7 +1186,7 @@ mod tests
             AddressMatches::new(GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 900, 100), vec![99]),
             ];
 
-        let mut filter_result = FilterSearchComparator(
+        let filter_result = FilterSearchComparator(
             expected_search_result,
             &process,
             1,

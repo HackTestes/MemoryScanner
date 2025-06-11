@@ -464,9 +464,8 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                 }
 
                 let unit_measurement = command_list[opt_index+2];
-                let mut copy_buffer_size_bytes: usize = 0;
 
-                copy_buffer_size_bytes = match unit_measurement
+                let copy_buffer_size_bytes: usize = match unit_measurement
                 {
                     "KiB" => size_number*1024,
                     "MiB" => size_number*1024*1024,

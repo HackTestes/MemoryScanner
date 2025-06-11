@@ -218,7 +218,7 @@ pub fn FilterParallelSearchLinearComparator<T: Send + 'static + Clone>(
 
                 // Remember that the results are ajusted back, becoming relative to the original regions
                 return thread_results;
-            });
+            }).unwrap();
         }
 
         // Give the results to be later collected in order
@@ -273,6 +273,7 @@ mod tests
         let operations: Vec<(SearchEngines::ComparisonOperation, u32)> = vec![(ComparisonOperation::Equal, 1)];
 
         let timer = time::Instant::now();
+        #[allow(unused_variables)] // Allow because of commented code below
         let all_results = StartParallelSearchLinearComparator::<u32>(
             &arc_buffer,
             &mut thread_workload,
@@ -288,8 +289,9 @@ mod tests
         println!("Throughput: \n{} bytes/ms \n{} GiB/s", buffer_size as u128/elapsed.as_millis(), (buffer_size/(1024*1024*1024)) as f64 /elapsed.as_secs() as f64);
         //println!("Results from search: \n{:?}", all_results);
 
+        #[allow(unused_variables)] // Allow because of commented code below
         let expected: Vec<Vec<Vec<usize>>> = vec![ vec![ vec![] ] ];
-        //assert_eq!(expected, all_results);
+        assert_eq!(expected, all_results);
         assert!(false);
     }
 

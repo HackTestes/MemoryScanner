@@ -322,7 +322,7 @@ pub fn read_from_process_vm(process_handle: windows_sys::Win32::Foundation::HAND
 {
     // Gets the amount of transfered bytes to the buffer
     let mut transfered_bytes: usize = 0;
-    let mut transfered_bytes_ptr: *mut usize = &mut transfered_bytes;
+    let transfered_bytes_ptr: *mut usize = &mut transfered_bytes;
 
     let success_code = unsafe
     {

@@ -39,7 +39,6 @@ pub enum InjectionFileParsingErrors
     // Failure during entry parsing
     EntryParsingError_UnknownFiled,
     EntryParsingError_InvalidParameter, // Let's say, an incompatible type
-    EntryParsingError_InvalidRange,
     EntryParsingError_InvalidRangeValue, // Valid range format, but it uses letters or negative values
     EntryParsingError_InvalidRange_MissingPair,
     EntryParsingError_MissingKeyValuePair,
@@ -151,8 +150,6 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError>
     let mut hex_list: Vec<u8> = vec![];
     for i in (0..s.len()).step_by(2)
     {
-        let hex_byte = &s[i..i + 2];
-
         // We can't decode it
         let hex_doceded_r = u8::from_str_radix(&s[i..i + 2], 16);
         if hex_doceded_r.is_err()

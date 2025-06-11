@@ -17,8 +17,8 @@ use std::fmt;
 pub enum GenericOSErrors
 {
     GenericFail, // If you don't want to specify the type of error (useful when you don't have good error reporting). It simply means "something went wrong"
-    ProcessDoesntExist,
-    PermissionDenied,
+    //ProcessDoesntExist,
+    //PermissionDenied,
     PartialReadCopy, // Only copied part of the buffer
     SnapshotBufferIsTooSmall
 }
@@ -190,7 +190,9 @@ impl Drop for PausedProcessTracker<'_, '_>
         }
 
         // The tracker is being dropped, resume the process
-        self.0.resume();
+        // Since this is happening inside of a drop function, errors will not propagate
+        // In this case it is best to simply best to panic to alert users of an error
+        self.0.resume().unwrap();
     }
 }
 
@@ -230,7 +232,10 @@ impl Drop for GenericProcess
 {
     fn drop(&mut self)
     {
-        OSInterface::close_handle(self.handle);
+        // Same as the Drop in resume function.
+        // Since this is happening inside of a drop function, errors will not propagate
+        // In this case it is best to simply best to panic to alert users of an error
+        OSInterface::close_handle(self.handle).unwrap();
     }
 }
 
@@ -470,6 +475,7 @@ impl GenericProcess
     // A version of the tracked_pause function that exposes a varible for testing if drop was called or not
     // This version simply changes the state of a bool, being true or false
     #[cfg(test)]
+    #[allow(elided_named_lifetimes)]
     pub fn tracked_pause_test<'a, 'b>(&'a self, state: &'b mut bool) -> Result<PausedProcessTracker, GenericOSErrors>
     where 'b: 'a // This means that the state var lives as long as 'a/the process
     {

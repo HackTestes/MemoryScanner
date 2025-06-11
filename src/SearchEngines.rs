@@ -11,18 +11,22 @@ pub enum Engines
 
 // A simple linear search algorithm
 // It simply read byte per byte and check for equality
+/*
 fn NaiveLinearSearch()
 {
 
 }
+*/
 
 // A simple linear search algorithm
 // It simply read byte per byte and check for equality
 // Insted of accecpting a type, it accepts a [u8] pattern to search
+/*
 fn NaiveLinearSearchPattern()
 {
 
 }
+*/
 
 #[derive(Clone, Copy)]
 #[derive(Debug)]
