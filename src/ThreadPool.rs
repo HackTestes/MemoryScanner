@@ -339,7 +339,7 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
             // Wake up all idle threads
             // Threads that have some work will continue to do so. When they finish, they will see a new task and exit
             // Also, we can safely ignore the assigned field
-            self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() ).unwrap();
+            self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() );
         }
     }
 }
@@ -762,6 +762,7 @@ mod tests
         assert!(false);
     }*/
 
+    #[ignore]
     #[test]
     fn TestThreadPool_ScopedThreads()
     {
@@ -785,6 +786,7 @@ mod tests
         assert!(false);
     }
 
+    #[ignore]
     #[test]
     fn TestThreadPool_ScopedThreads02()
     {

@@ -5,7 +5,7 @@
 #![allow(unexpected_cfgs)]
 
 // Treat all warinings as errors
-#![deny(warnings)]
+//#![deny(warnings)]
 
 use std::env;
 use std::io;

@@ -77,7 +77,7 @@ pub fn get_process_handle(process_id: u64) -> Result<OSSpecificHandle, GenericOS
 pub fn close_handle(handle: OSSpecificHandle) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
     // It needs a handle that can be opened, otherwise we can't drop
-    if handle == 0
+    if handle != 0
     {
         return Ok(());
     }

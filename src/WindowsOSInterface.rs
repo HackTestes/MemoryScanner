@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Bring the generic inteface so we can translate specific to generic
 use crate::GenericOSInterface;
 
