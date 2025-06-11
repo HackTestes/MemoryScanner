@@ -302,6 +302,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static + std::fmt::Debug> Thre
         return self.thread_list.len();
     }
 
+    // EXPERIMENTAL CODE
     pub fn scope_execute<args_type: Send>(&mut self, mut input_args: Vec<args_type>, task: fn (args: ARGS) -> RETURN_STRUCT) -> Vec<RETURN_STRUCT>
     {
         for t_idx in 0..input_args.len()
@@ -340,11 +341,14 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
             // Wake up all idle threads
             // Threads that have some work will continue to do so. When they finish, they will see a new task and exit
             // Also, we can safely ignore the assigned field
+            // Calling unwrap() here ALWAYS causes STATUS_STACK_BUFFER_OVERRUN
+            // TODO INVESTIGATE
             let _ = self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() );
         }
     }
 }
 
+// EXPERIMENTAL CODE
 macro_rules! scope_execute
 {
     ($args_type: ty, $return_type: ty, $input_args: ident, $task: ident, $thread_pool: ident) =>
