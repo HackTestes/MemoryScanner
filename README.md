@@ -124,6 +124,16 @@ cargo build [--release]
 
     * [x] Make the parallel search code a routine, to improve on testing and improve readability of the Glue code
 
+    * [ ] Improve the OS Interface API, since it is really weird right now (I pass the process and its handle in separate variables which is redundant)
+        * Code search: "TODO: IMPROVE THE API"
+        * Why am I doing this: I am doing this because the handle is private and I am also sharing internal process structures for testing (the fake memory regions)
+
+    * [ ] Investigate STATUS_STACK_BUFFER_OVERRUN on ThreadPool implementation
+        * Explanation: calling unwrap in ThreadPool Drop (channel send) could cause Stack Overruns (STATUS_STACK_BUFFER_OVERRUN) on safe Rust (huh)
+        * How to reproduce it: 1.call panic in the task; 2.call wait_all(); 3. Wait for Drop to be called. Current workaround: don't call unwrap
+        * Affected test: TestPanickingThreads
+        * Code search: "TODO INVESTIGATE"
+
 * Performance optimization
 
     * [x] Use threads pools in the search
@@ -142,22 +152,23 @@ cargo build [--release]
         * Goal: memory allocations can be slow
         * How: remove buffer cloning where possible in the codebase. I might be able to acheive it by using a scoped thread pool implementation and share slices
         
-    * [ ] Add IDs to regions
-        * Goal: I don't remember anymore, but I suspect it has to do with better management of pages (aka access them directly in a hash map)
+    * [x] Add IDs to regions
+        * Goal: Get the original pages from the ajusted ones
         * How: we can create an ID based on the base address and the region size
 
 * Stability and correctness
 
-    * [ ] Add more unit tests
+    * [x] Add more unit tests
         * Goal: Detect the behaviour of misaligned filter searches (the global match page ajustment)
         * How: Yet to be investigated
 
 * Features
 
-    * [ ] QoL:Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
+    * [x] QoL:Add a configuration to ignore read page errors or add one to halt if wanted (so stop by default)
         * Goal: Allow the search to discard pages that can't be read, essentially ignoring errors. In my experimentation, some pages return errors despite everything being correct, so I don't want them to stop the whole search process
         * How: During the copy of pages, report the pages that returned errors and update the global pages list
         * Current workaround: insted of reporting a failure, I fill the buffer with zeros. This approach, however, wastes RAM and CPU power on useless searches, also having the potential to cause false matches when looking for 0.
+        * **Current fix**: errored pages are considered moved (the process may have deallocated for example) thus it wouldn't contain valid results and are always ignored
 
     * [ ] QoL: Display a message to the user when the selected buffer is insufficient, instead of panicking
         * How: remove unwrap for the search and actually check for errors
@@ -182,7 +193,11 @@ cargo build [--release]
             * Alternative: BPF LSM
                 * Setup a rule that checks ptrace target name (process name)
 
+            * Alternative: Run the scanner before the program as it would make it a parent process
+                * YAMA usually allows parents to ptrace childs, so we can run the scanner as the parent and later thry to attach through a new action (ATTACH)
+
+
 * Known bugs
 
-    * [ ] Small buffers cause an out of bounds access
+    * [x] Small buffers cause an out of bounds access
         * Tests to reproduce: Use a non-contiguous victim process and as for a buffer smaller than the total sum of the non-contiguous segments
