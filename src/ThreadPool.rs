@@ -194,7 +194,7 @@ pub struct ThreadPool<ARGS, RETURN_STRUCT>
 }
 
 // Send + 'static is required by thread::spawn -> they don't cause mem leaks as the underlying data gets deallocated
-impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETURN_STRUCT>
+impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static + std::fmt::Debug> ThreadPool<ARGS, RETURN_STRUCT>
 {
     pub fn new(num_threads: usize) -> Result<ThreadPool<ARGS, RETURN_STRUCT>, TPErrors>
     {
@@ -289,6 +289,7 @@ impl<ARGS: Send + 'static, RETURN_STRUCT: Send + 'static> ThreadPool<ARGS, RETUR
             // Has it finished? Wait for results
             results.push(self.thread_list[thread_id].result_queue_receiver.recv().unwrap());
 
+
             // Reset the environment, so it can accept new tasks
             self.thread_list[thread_id].assigned = false;
         }
@@ -339,7 +340,7 @@ impl<ARGS, RETURN_STRUCT> Drop for ThreadPool<ARGS, RETURN_STRUCT>
             // Wake up all idle threads
             // Threads that have some work will continue to do so. When they finish, they will see a new task and exit
             // Also, we can safely ignore the assigned field
-            self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() );
+            let _ = self.thread_list[thread_id].task_queue_sender.send( TaskTP::exit() );
         }
     }
 }
