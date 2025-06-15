@@ -979,7 +979,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let mut process = GenericProcess::create(
+        let mut process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
 
@@ -1210,7 +1210,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
                 FakeGenericMemoryRegion::new(
@@ -1296,7 +1296,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
                 FakeGenericMemoryRegion::new(
@@ -1367,7 +1367,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
 

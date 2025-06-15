@@ -20,7 +20,10 @@ pub enum GenericOSErrors
     //ProcessDoesntExist,
     //PermissionDenied,
     PartialReadCopy, // Only copied part of the buffer
-    SnapshotBufferIsTooSmall
+    SnapshotBufferIsTooSmall,
+    QueryModuleError,
+    QueryModuleNameError,
+    BufferError
 }
 
 // Each bit represent a specific permission
@@ -154,7 +157,7 @@ impl GenericMemoryRegion
 // A fake memory region for testing
 // This is just to be a named tuple
 #[cfg(test)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FakeGenericMemoryRegion
 {
     pub memory_region: GenericMemoryRegion,
@@ -206,6 +209,29 @@ pub struct SnapshotReturn
     pub regions_with_read_errors: Vec<GenericMemoryRegion>
 }
 
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
+pub struct ProcessModule
+{
+    pub module_name: String,
+    pub base_address: usize,
+    pub size: usize // in bytes
+}
+
+impl ProcessModule
+{
+    pub fn new(module_name_input: String, base_address_input: usize, size_input: usize) -> ProcessModule
+    {
+        return ProcessModule
+        {
+            module_name: module_name_input,
+            base_address: base_address_input,
+            size: size_input
+        };
+    }
+}
+
 // It represents a single ATTACHED process
 // Attaching early is important to avoid process ID race conditions
 // Example: you pass PID 50 and attach to it
@@ -225,6 +251,10 @@ pub struct GenericProcess
     // An attribute to hold the custom test image from  the create method
     #[cfg(test)]
     pub custom_image: Vec< FakeGenericMemoryRegion >,
+
+    // An attribute to hold the custom test modules to the process
+    #[cfg(test)]
+    pub custom_module: Vec< ProcessModule >,
 }
 
 // Closes the handle, otherwise we will have a memory leak with the descriptors
@@ -237,6 +267,57 @@ impl Drop for GenericProcess
         // In this case it is best to simply best to panic to alert users of an error
         OSInterface::close_handle(self.handle).unwrap();
     }
+}
+
+// In tests, verify if memory regions don't overlap
+#[cfg(test)]
+fn validate_fake_memory_regions(mem_regions: &Vec<FakeGenericMemoryRegion>)
+{
+    // Sort the array based on the base address
+    // Clone to avoid changing the original array
+    let mut sorted_mem_regions = mem_regions.clone();
+    sorted_mem_regions.sort_by_key(|fake_region| fake_region.memory_region.base_address);
+
+    // Start the count at the first region
+    let mut address_used: usize = sorted_mem_regions[0].memory_region.base_address + sorted_mem_regions[0].memory_region.size_bytes;
+
+    // Check if the next region does not start inside the region of the previous one
+    // Don't forget to skip the first one
+    for fake_region in &sorted_mem_regions[1..]
+    {
+        // The base address is inside of a used range
+        if fake_region.memory_region.base_address < address_used
+        {
+            // Print error message and debug info
+            panic!("Memory regions overlap!\n Previous region: {:?}\n Current address used: {}", fake_region, address_used);
+        }
+
+        // All fine. So update the address space used up
+        address_used = fake_region.memory_region.base_address + fake_region.memory_region.size_bytes;
+    }
+
+    // If everything works, it will not cause panics
+}
+
+// In tests, verify if the modules have a corresponding region
+#[cfg(test)]
+fn validate_custom_modules(modules: &Vec<ProcessModule>, mem_regions: &Vec<FakeGenericMemoryRegion>)
+{
+    // Check for each module a corrsponding region (same base address and same size)
+    for module in modules
+    {
+        let result = mem_regions.iter().position(|region| 
+            (region.memory_region.base_address == module.base_address) &&
+            (region.memory_region.size_bytes == module.size)
+        );
+
+        if result == None
+        {
+            panic!("Could not find a corresponding region for the module: {:?}", module);
+        }
+    }
+
+    // If everything goes fine, it will not generate any panics
 }
 
 impl GenericProcess
@@ -255,7 +336,21 @@ impl GenericProcess
         };
 
         #[cfg(test)]
-        return Ok(GenericProcess{handle: handle, pid: process_id, custom_image: OSInterface::default_test_process_image()});
+        {
+            let fake_modules = OSInterface::default_test_process_module();
+            let fake_regions = OSInterface::default_test_process_image();
+
+            validate_fake_memory_regions(&fake_regions);
+            validate_custom_modules(&fake_modules, &fake_regions);
+
+            return Ok(GenericProcess
+                {
+                    handle: handle,
+                    pid: process_id,
+                    custom_image: fake_regions,
+                    custom_module: fake_modules
+                });
+        }
 
         #[cfg(not(test))]
         return Ok(GenericProcess{handle: handle, pid: process_id});
@@ -264,14 +359,33 @@ impl GenericProcess
     // A function that can only be used during tests
     // The goal of such function is to be able to create a custom fake process for each test, allowing me to test different patterns
     #[cfg(test)]
-    pub fn create(process_id: u64, custom_image_input: Vec< FakeGenericMemoryRegion >) -> Self
+    pub fn create(process_id: u64, custom_image_input: Vec<FakeGenericMemoryRegion>, custom_module_input: Vec<ProcessModule>) -> Self
     {
-        return GenericProcess{handle: process_id, pid: process_id, custom_image: custom_image_input};
+        validate_fake_memory_regions(&custom_image_input);
+        validate_custom_modules(&custom_module_input, &custom_image_input);
+        
+        return GenericProcess{handle: process_id, pid: process_id, custom_image: custom_image_input, custom_module: custom_module_input};
+    }
+
+    // A version of create that only cares for memory regions
+    #[cfg(test)]
+    pub fn create_mem_regions(process_id: u64, custom_image_input: Vec<FakeGenericMemoryRegion>) -> Self
+    {
+        // It only validates meomory regions, so we may have problems with invalid modules
+        validate_fake_memory_regions(&custom_image_input);
+        
+        return GenericProcess{handle: process_id, pid: process_id, custom_image: custom_image_input, custom_module: OSInterface::default_test_process_module()};
     }
 
     pub fn pid(&self) -> u64
     {
         return self.pid;
+    }
+
+    pub fn get_modules(&self) -> Result<Vec<ProcessModule>, GenericOSErrors>
+    {
+        // Call the native OS implementation
+        return OSInterface::query_modules(self.handle, self);
     }
 
     // It also returns with pages info, nut it allows the caller to filter some desired proporties
@@ -578,7 +692,7 @@ mod tests
         println!("{:?}", result);
 
         // Does it return a handle?
-        assert_eq!( result, Ok(GenericProcess { handle: 1, pid: 1, custom_image: OSInterface::default_test_process_image()}) );
+        assert_eq!( result, Ok(GenericProcess { handle: 1, pid: 1, custom_image: OSInterface::default_test_process_image(), custom_module: OSInterface::default_test_process_module()}) );
     }
 
     // Does the attach method check for errors and return the handle on success?
@@ -590,6 +704,159 @@ mod tests
 
         // Does it return the error?
         assert!( matches!( result, Err(GenericOSErrors::GenericFail) ) );
+    }
+
+    #[test]
+    fn TestProcessDefaultModule()
+    {
+        let result = GenericProcess::attach(1).unwrap();
+        println!("{:?}", result);
+
+        // Does it return the error?
+        assert_eq!( result.custom_module, OSInterface::default_test_process_module() );
+    }
+
+    #[test]
+    fn TestProcess_CreationCustom()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 800, 100),
+            ];
+
+        let memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 500]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+    
+        let result = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        println!("{:?}", result);
+
+        assert_eq!( result.custom_module, modules );
+        assert_eq!( result.custom_image, memory_regions );
+    }
+
+    #[test]
+    #[should_panic]
+    fn TestProcess_CreationCustom_ErrorOverlappingRegions()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 800, 100),
+            ];
+
+        let memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 500]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 550, 100),
+                    vec![3; 100]),
+            ];
+    
+        let result = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        println!("{:?}", result);
+
+        assert_eq!( result.custom_module, modules );
+        assert_eq!( result.custom_image, memory_regions );
+    }
+
+    #[test]
+    #[should_panic]
+    fn TestProcess_CreationCustom_ErrorNoCorrespondingRegionForModule_BaseAddress()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 900, 100),
+            ];
+
+        let memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 500]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+    
+        let result = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        println!("{:?}", result);
+
+        assert_eq!( result.custom_module, modules );
+        assert_eq!( result.custom_image, memory_regions );
+    }
+
+    #[test]
+    #[should_panic]
+    fn TestProcess_CreationCustom_ErrorNoCorrespondingRegionForModule_Size()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 500, 99),
+            ];
+
+        let memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 500]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+    
+        let result = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        println!("{:?}", result);
+
+        assert_eq!( result.custom_module, modules );
+        assert_eq!( result.custom_image, memory_regions );
     }
 
     #[test]
@@ -664,7 +931,7 @@ mod tests
 
         //let process = GenericProcess::attach(1).unwrap();
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
                 FakeGenericMemoryRegion::new(
@@ -1128,7 +1395,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
                 FakeGenericMemoryRegion::new(
@@ -1140,11 +1407,11 @@ mod tests
                     vec![2; 500]),
 
                 FakeGenericMemoryRegion::new(
-                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 600, 100),
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 100),
                     vec![3; 100]),
 
                 FakeGenericMemoryRegion::new(
-                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 700, 100),
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 800, 100),
                     vec![4; 100]),
             ]
         );
@@ -1177,7 +1444,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
                 FakeGenericMemoryRegion::new(
@@ -1219,7 +1486,7 @@ mod tests
         let page_perms = PageProtection_Read|PageProtection_Write;
         let page_state = GenericRegionState::Resident;
 
-        let process = GenericProcess::create(
+        let process = GenericProcess::create_mem_regions(
             1, // PID
             vec![
                 FakeGenericMemoryRegion::new(

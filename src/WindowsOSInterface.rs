@@ -1,9 +1,11 @@
 #![allow(dead_code)]
+#![cfg(target_os = "windows")]
 
 // Bring the generic inteface so we can translate specific to generic
 use crate::GenericOSInterface;
 
 use std::os::raw::c_void;
+use std::mem::size_of;
 
 // Windows specific interfaces
 #[cfg(target_os = "windows")]
@@ -31,7 +33,7 @@ pub fn get_process_handle(process_id: u64) -> Result<windows_sys::Win32::Foundat
     };
 
     // If it returns NULL (0), something went wrong
-    if handle == 0
+    if handle == std::ptr::null_mut()
     {
         eprintln!("Error from opening a process. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
@@ -89,6 +91,133 @@ pub fn resume_process(process: &GenericOSInterface::GenericProcess) -> Result<()
         eprintln!("Error from resuming the process. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
+}
+
+
+// https://learn.microsoft.com/pt-br/windows/win32/api/psapi/nf-psapi-enumprocessmodulesex
+// https://learn.microsoft.com/pt-br/windows/win32/api/psapi/nf-psapi-getmodulefilenameexa
+// https://learn.microsoft.com/pt-br/windows/win32/api/psapi/ns-psapi-moduleinfo
+pub fn query_modules(handle: windows_sys::Win32::Foundation::HANDLE, process: &GenericOSInterface::GenericProcess) -> Result< Vec<GenericOSInterface::ProcessModule>, GenericOSInterface::GenericOSErrors >
+{
+    // The windows API uses 32 bit integers for this (should be for historical reasons)
+    let mut bytes_needed: u32 = 0;
+    //let bytes_needed_ptr: *mut u32 = &mut bytes_needed;
+
+    let module_size: usize = size_of::<windows_sys::Win32::Foundation::HMODULE>();
+
+    let mut module_buffer: Vec< windows_sys::Win32::Foundation::HMODULE > = vec![];
+    
+    // Get the necessary amount of bytes first
+    let success_code: i32 = unsafe
+    {
+        windows_sys::Win32::System::ProcessStatus::EnumProcessModules(
+            handle,
+            module_buffer.as_mut_ptr(),
+            0, // Pretend that the buffer size is zero, we don't want to write anything here yet
+            &mut bytes_needed
+        )
+    };
+
+    // Errors are equal to "zero" (false)
+    if success_code == 0
+    {
+        eprintln!("Error from getting module enum buffer size. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        return Err(GenericOSInterface::GenericOSErrors::BufferError);
+    }
+
+    // Call it again with the right amount of space in the buffer
+
+    module_buffer = vec![std::ptr::null_mut(); bytes_needed as usize/module_size];
+
+    let success_code: i32 = unsafe
+    {
+        windows_sys::Win32::System::ProcessStatus::EnumProcessModules(
+            handle,
+            module_buffer.as_mut_ptr(),
+            (module_buffer.len() * module_size) as u32,
+            &mut bytes_needed
+        )
+    };
+
+   if success_code == 0
+    {
+        eprintln!("Error from getting modules. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+        return Err(GenericOSInterface::GenericOSErrors::QueryModuleError);
+    }
+
+    // Was the space sufficient? Or do they match perfectly?
+    if bytes_needed as usize != module_buffer.len() * module_size
+    {
+        eprintln!("The buffer modules space doesn't match the bytes needed");
+        return Err(GenericOSInterface::GenericOSErrors::BufferError);
+    }
+
+    // Interate over each module and get its information
+
+    let mut final_modules: Vec<GenericOSInterface::ProcessModule> = vec![];
+
+    for module_handle in module_buffer
+    {
+        // Get module name
+        let mut module_name_buffer: [u16; 1024*3] = [0; 1024*3];
+        let module_name_buffer_size_bytes: u32 = (module_name_buffer.len() * size_of::<u16>()) as u32;
+
+        let module_name_success_code = unsafe
+        {
+            windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW(
+                module_handle,
+                module_name_buffer.as_mut_ptr(),
+                module_name_buffer_size_bytes
+            )
+        };
+
+        if module_name_success_code == 0
+        {
+            eprintln!("Error from getting the module name. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+            return Err(GenericOSInterface::GenericOSErrors::QueryModuleNameError);
+        }
+
+        // Everything went fine, so get the name
+        let module_name: String = String::from_utf16(&module_name_buffer).unwrap();
+
+
+        // Get module info (base address and size)
+        let mut win_module_info: windows_sys::Win32::System::ProcessStatus::MODULEINFO = windows_sys::Win32::System::ProcessStatus::MODULEINFO
+        {
+            lpBaseOfDll: std::ptr::null_mut(),
+            SizeOfImage: 0,
+            EntryPoint: std::ptr::null_mut()
+        };
+
+        let module_info_success_code = unsafe
+        {
+            windows_sys::Win32::System::ProcessStatus::GetModuleInformation(
+                handle,
+                module_handle,
+                &mut win_module_info,
+                size_of::<windows_sys::Win32::System::ProcessStatus::MODULEINFO>() as u32
+            )
+        };
+
+        if module_info_success_code == 0
+        {
+            eprintln!("Error from getting the module info. Windows error code: {}", unsafe{windows_sys::Win32::Foundation::GetLastError()});
+            return Err(GenericOSInterface::GenericOSErrors::QueryModuleNameError);
+        }
+
+        // Everything went fine, so get the module info
+        let module_base_address: usize = win_module_info.lpBaseOfDll as usize;
+        let module_size: usize = win_module_info.SizeOfImage as usize;
+
+        // Create the generic module
+        final_modules.push( GenericOSInterface::ProcessModule::new(
+            module_name,
+            module_base_address,
+            module_size
+        ) );
+    }
+
+    return Ok(final_modules);
 }
 
 // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex

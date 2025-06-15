@@ -12,6 +12,18 @@ use crate::GenericOSInterface;
 #[cfg(test)]
 pub type OSSpecificHandle = u64;
 
+
+#[cfg(test)]
+pub fn default_test_process_module() -> Vec<GenericOSInterface::ProcessModule>
+{
+    return vec![GenericOSInterface::ProcessModule
+    {
+        module_name: "default_module.exe".to_string(),
+        base_address: 0,
+        size: 100
+    }];
+}
+
 // A default test image process, so not every test needs to define its own process
 #[cfg(test)]
 pub fn default_test_process_image() -> Vec<GenericOSInterface::FakeGenericMemoryRegion>
@@ -114,6 +126,16 @@ pub fn resume_process(process: &GenericOSInterface::GenericProcess) -> Result<()
     {
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
+}
+
+pub fn query_modules(handle: OSSpecificHandle, process: &GenericOSInterface::GenericProcess) -> Result< Vec<GenericOSInterface::ProcessModule>, GenericOSInterface::GenericOSErrors >
+{
+    if process.custom_module.len() == 0
+    {
+        return Err(GenericOSInterface::GenericOSErrors::QueryModuleError);
+    }
+
+    return Ok(process.custom_module.clone());
 }
 
 #[cfg(test)]

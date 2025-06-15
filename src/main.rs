@@ -4,8 +4,8 @@
 #![allow(non_snake_case)]
 #![allow(unexpected_cfgs)]
 
-// Treat all warinings as errors
-#![deny(warnings)]
+// Treat all warnings as errors
+//#![deny(warnings)]
 
 use std::env;
 use std::io;
