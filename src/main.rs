@@ -28,6 +28,7 @@ mod SearchRoutines;
 mod CLIFrontEnd;
 mod Configuration;
 mod CodeInjectionFileParsing;
+mod CodeInjection;
 
 fn GetNumberOfMatches(all_matches: &Vec<Matches::AddressMatches>) -> usize
 {

@@ -388,7 +388,7 @@ impl GenericProcess
         return OSInterface::query_modules(self.handle, self);
     }
 
-    // It also returns with pages info, nut it allows the caller to filter some desired proporties
+    // It also returns with pages info, nut it allows the caller to filter some desired properties
     // page_permissions works as an at least: a page can at least read; a page can at least read and write
     // page_permissions_exact needs a perfect match: page must only have a read permision (read only)
     pub fn get_mem_regions_info(&self, page_permissions: GenericPageProtections, page_permissions_exact: Option<GenericPageProtections>, region_state: Option<GenericRegionState>) -> Result< Vec<GenericMemoryRegion>, GenericOSErrors>

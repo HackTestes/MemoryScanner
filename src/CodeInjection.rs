@@ -1,2 +1,315 @@
 use crate::CodeInjectionFileParsing;
+use crate::GenericOSInterface;
+use std::io;
+use std::io::Write;
+use std::mem;
 
+// x86_64
+const nop_instruc: u8 = 0x90;
+
+enum CodeInjectionErrors
+{
+    OSInterfaceErrors(GenericOSInterface::GenericOSErrors),
+    ModuleNotFound,
+    InstructionNotFound,
+    FoundMoreThanMatchesAllowed
+
+}
+
+fn copy_memory_regions(search_type: CodeInjectionFileParsing::SearchType, module_name: Option<String>, process: &GenericOSInterface::GenericProcess) -> Result<Vec<(usize, Vec<u8>)>, CodeInjectionErrors>
+{
+    // Vector of base_addresses and its respective region payload
+    let mut region_copies: Vec<(usize, Vec<u8>)> = vec![];
+
+    match search_type
+    {
+        // If we are looking just for executable memory, we may need to copy several regions
+        CodeInjectionFileParsing::SearchType::exe_memory =>
+        {
+            // Get all executable regions from the process
+            // Page must AT LEAST be executable (don't care for read or write)
+            // Page must be resident
+            let exe_memory_regions_r = process.get_mem_regions_info(GenericOSInterface::PageProtection_Execute, None, Some(GenericOSInterface::GenericRegionState::Resident));
+
+            // Check errors (do not panic here)
+            let exe_memory_regions = match exe_memory_regions_r
+            {
+                Ok(value) => value,
+                Err(error) => return Err(CodeInjectionErrors::OSInterfaceErrors(error))
+            };
+
+            // Copy the memory regions into a buffer and store it alongside its base address
+            for region in exe_memory_regions
+            {
+                let mut buffer: Vec<u8> = vec![0; region.size_bytes];
+                let os_result = process.read_from_vm(region.base_address, &mut buffer);
+
+                match os_result
+                {
+                    Ok(_) => {}, // Do nothing
+                    Err(error) => return Err(CodeInjectionErrors::OSInterfaceErrors(error))
+                }
+
+                let base_address: usize = region.base_address;
+
+                region_copies.push( (base_address, buffer) );
+            }
+        },
+
+        // If we are looking for a module, we only need to copy the memory associated with it
+        CodeInjectionFileParsing::SearchType::module_name =>
+        {
+            // Get the right module from all of them
+            let modules_r = process.get_modules();
+
+            let modules: Vec<GenericOSInterface::ProcessModule> = match modules_r
+            {
+                Ok(value) => value,
+                Err(error) => return Err(CodeInjectionErrors::OSInterfaceErrors(error))
+            };
+
+            // This should never panic if the parsing is correct. Besides, any panic should trigger the tests
+            let target_module_r = modules.iter().position(|m| m.module_name == module_name.clone().unwrap());
+
+            let target_module_pos: usize = match target_module_r
+            {
+                Some(value) => value,
+                None => return Err(CodeInjectionErrors::ModuleNotFound)
+            };
+
+            let target_module: GenericOSInterface::ProcessModule = modules[target_module_pos].clone();
+
+            // We got the right module, now copy its contents
+            let mut buffer: Vec<u8> = vec![0; target_module.size];
+            let os_result = process.read_from_vm(target_module.base_address, &mut buffer);
+
+            match os_result
+            {
+                Ok(_) => {}, // Do nothing
+                Err(error) => return Err(CodeInjectionErrors::OSInterfaceErrors(error))
+            }
+
+            region_copies.push( (target_module.base_address, buffer) );
+        }
+    }
+
+    return Ok(region_copies);
+}
+
+// Inject code into the process and on success, return where each instruction was replaced
+fn find_injection_code_address(mut memory_regions_payload: Vec< (usize, Vec<u8>) >,
+                            instructions: Vec<CodeInjectionFileParsing::InjectionEntry>)
+
+                            -> Result< Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)>, CodeInjectionErrors>
+{
+
+    let mut instructions_abs_addresses: Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)> = vec![];
+
+    // Look for the instructions in the copied regions
+    for instruc in instructions
+    {
+        let mut matches: usize = 0;
+        let mut absolute_vm_addresses: Vec<usize> = vec![];
+        
+        for region_copy in &mut memory_regions_payload
+        {
+            // Just renaming it to better names
+            let region_base_address = region_copy.0;
+            let region_buffer = mem::take(&mut region_copy.1);
+
+            for payload_idx in 0..region_buffer.len()
+            {
+                // Match the instruction
+                // This could be a new search engine (TODO)
+                let mut did_it_match: bool = true;
+
+                for byte_idx in 0..instruc.instruction.len()
+                {
+                    if payload_idx + byte_idx >= region_buffer.len() || instruc.instruction[byte_idx] != region_buffer[payload_idx + byte_idx]
+                    {
+                        did_it_match = false;
+                        break;
+                    }
+                }
+
+                if did_it_match == true
+                {
+                    matches += 1;
+                    absolute_vm_addresses.push(payload_idx + region_base_address);
+                }
+            }
+        }
+
+        // Did we find it?
+        // No
+        if matches == 0
+        {
+            eprintln!("Could not find the instruction: {:?}", instruc);
+            return Err(CodeInjectionErrors::InstructionNotFound);
+        }
+
+        if instruc.matches_allowed != None && matches > instruc.matches_allowed.unwrap()
+        {
+            eprintln!("Found more than the allowed matches: {}/{}", matches, instruc.matches_allowed.unwrap());
+            return Err(CodeInjectionErrors::FoundMoreThanMatchesAllowed);
+        }
+
+        // Yes
+        instructions_abs_addresses.push( (instruc, absolute_vm_addresses) );
+    }
+
+    // Everything went fine
+    return Ok(instructions_abs_addresses);
+}
+
+fn inject_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)>, process: &GenericOSInterface::GenericProcess, dry_run: bool) -> Result<(), CodeInjectionErrors>
+{
+    for injection in injection_addresses
+    {
+        let instruction = injection.0.clone();
+        let absolute_addresses = &injection.1;
+
+        let mut range_start: usize = 0;
+        let mut range_size: usize = 0;
+
+        // If the range is empty, consider that we need to replace the whole input instruction
+        if instruction.range == None
+        {
+            range_start = 0;
+            range_size = instruction.instruction.len();
+        }
+
+        else
+        {
+            range_start = instruction.range.unwrap().0;
+            range_size = instruction.range.unwrap().1;
+        }
+
+        for address in absolute_addresses
+        {
+            let nop_buffer: Vec<u8> = vec![nop_instruc; range_size];
+            let injection_address = address + range_start;
+
+            println!("Injecting code. Instruction: {:?} \nAddress: {}", nop_buffer, injection_address);
+
+            if dry_run != true
+            {
+                let os_result = process.write_into_vm(&nop_buffer, injection_address);
+                
+                // Let the user know about errors, but don't abort
+                if os_result.is_err()
+                {
+                    eprintln!("Error when writing code into the process!");
+                }
+            }
+
+            println!("Successful injection");
+        }
+    }
+
+    return Ok(());
+}
+
+fn restore_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)>, process: &GenericOSInterface::GenericProcess, dry_run: bool) -> Result<(), CodeInjectionErrors>
+{
+
+    for injection in injection_addresses
+    {
+        let instruction = injection.0.clone();
+        let absolute_addresses = &injection.1;
+
+        let mut range_start: usize = 0;
+        let mut range_size: usize = 0;
+
+        // If the range is empty, consider that we need to replace the whole input instruction
+        if instruction.range == None
+        {
+            range_start = 0;
+            range_size = instruction.instruction.len();
+        }
+
+        else
+        {
+            range_start = instruction.range.unwrap().0;
+            range_size = instruction.range.unwrap().1;
+        }
+
+        for address in absolute_addresses
+        {
+            let restore_buffer = &instruction.instruction[range_start..range_size];
+            let injection_address = address + range_start;
+ 
+            println!("Restoring code. Instruction: {:?} \nAddress: {}", restore_buffer, injection_address);
+
+            if dry_run != true
+            {
+                let os_result = process.write_into_vm(restore_buffer, injection_address);
+                
+                // Let the user know about errors, but don't abort
+                if os_result.is_err()
+                {
+                    eprintln!("Could not restore code. Error when writing code into the process!");
+                }
+            }
+
+            println!("Successful restore");
+        }
+    }
+
+    return Ok(());
+
+}
+
+// This fuction simply glues together the code injection helper functions
+// In this way, I can test parts of the code injection independently
+fn main_code_injection_flow(code_injection_config: CodeInjectionFileParsing::InjectionConfiguration, process: &GenericOSInterface::GenericProcess, dry_run: bool, wait_for_user: bool) -> Result<(), CodeInjectionErrors>
+{
+    // Copy all executable regions
+    let copied_mem_regions_r = copy_memory_regions(code_injection_config.search_type.unwrap(), code_injection_config.module_name, process);
+
+    let copied_mem_regions = match copied_mem_regions_r
+    {
+        Ok(value) => value,
+        Err(error) => return Err(error)
+    };
+
+    // Search for the code addresses
+    let injection_addresses_r = find_injection_code_address(copied_mem_regions, code_injection_config.instructions);
+
+    let injection_addresses = match injection_addresses_r
+    {
+        Ok(value) => value,
+        Err(error) => return Err(error)
+    };
+
+    // Inject the code
+    let injection_r = inject_code(&injection_addresses, process, dry_run);
+
+    match injection_r
+    {
+        Ok(_) => {},
+        Err(error) => return Err(error)
+    };
+
+    // Wait for user input to restore the original code
+    println!("Press ENTER to continue and restore the original instructions...");
+
+    // This is mostly to help in uni testing
+    if wait_for_user == true
+    {
+        let mut command = String::new();
+        std::io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut command).expect("failed to read line");
+    }
+
+    // Restore the code
+    let restoration_r = restore_code(&injection_addresses, process, dry_run);
+
+    match restoration_r
+    {
+        Ok(_) => {},
+        Err(error) => return Err(error)
+    };
+
+    return Ok(());
+}

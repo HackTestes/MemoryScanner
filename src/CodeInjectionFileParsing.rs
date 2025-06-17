@@ -70,7 +70,8 @@ pub enum SearchType
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-struct InjectionEntry
+#[derive(Clone)]
+pub struct InjectionEntry
 {
     pub instruction: Vec<u8>,
     pub range: Option<(usize, usize)>,
@@ -102,7 +103,7 @@ impl InjectionEntry
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-struct InjectionConfiguration
+pub struct InjectionConfiguration
 {
     pub search_type: Option<SearchType>,
     pub module_name: Option<String>,
