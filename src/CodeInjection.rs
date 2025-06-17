@@ -7,6 +7,8 @@ use std::mem;
 // x86_64
 const nop_instruc: u8 = 0x90;
 
+#[derive(Debug)]
+#[derive(PartialEq)]
 enum CodeInjectionErrors
 {
     OSInterfaceErrors(GenericOSInterface::GenericOSErrors),
@@ -312,4 +314,55 @@ fn main_code_injection_flow(code_injection_config: CodeInjectionFileParsing::Inj
     };
 
     return Ok(());
+}
+
+#[cfg(test)]
+mod tests
+{
+    // Import the current module to all tests
+    use crate::CodeInjection::*;
+    use crate::CodeInjectionFileParsing::*;
+    use crate::GenericOSInterface::*;
+
+    #[test]
+    fn TestCodeInjection_RegularCase()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 800, 100),
+            ];
+
+        let mut memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 500]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+
+        memory_regions[0].payload[50] = 0xAA;
+        memory_regions[0].payload[51] = 0xAA;
+        memory_regions[0].payload[52] = 0xAA;
+        memory_regions[0].payload[53] = 0xAA;
+    
+        let process = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        let needle = InjectionEntry::new(vec![0xAA, 0xAA, 0xAA, 0xAA], None, 1);
+        let configuration = InjectionConfiguration::new(Some(SearchType::module_name), Some("module.exe".to_string()), vec![needle]);
+
+        let injection_result = main_code_injection_flow(configuration, &process, false, false);
+
+        assert_eq!(Ok(()), injection_result);
+    }
 }
