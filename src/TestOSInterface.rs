@@ -192,14 +192,68 @@ pub fn iter_over_mem_regions(handle: OSSpecificHandle, process: &GenericOSInterf
 
 #[allow(unused_variables)] // TODO: IMPROVE THE API
 #[cfg(test)]
-pub fn write_into_process_vm(process_handle: OSSpecificHandle, buffer: &[u8], absolute_vm_address: usize, process: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
+pub fn write_into_process_vm(process_handle: OSSpecificHandle, buffer: &[u8], absolute_vm_address: usize, process: &mut GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
+
     if absolute_vm_address == 0
     {
         return Err(GenericOSInterface::GenericOSErrors::GenericFail);
     }
 
-    return Ok(());
+    // Loop over every region
+    for fake_region in process.custom_image.iter_mut()
+    {
+        // Check if the address matches with the range
+        if absolute_vm_address >= fake_region.memory_region.base_address && absolute_vm_address < (fake_region.memory_region.base_address + fake_region.memory_region.size_bytes)
+        {
+            // Yes, it matches.
+
+            // Is the payload empty?
+            if fake_region.payload.is_empty()
+            {
+                // Yes, then report the write failure
+                return Err(GenericOSInterface::GenericOSErrors::GenericFail);
+            }
+
+            // Use this to ajust the indexes to the correct position in the payload
+            let region_relative_idx: usize = absolute_vm_address-fake_region.memory_region.base_address;
+
+            // Does the write buffer fit in the region?
+            let max_write_address = absolute_vm_address + buffer.len();
+            let max_region_address = fake_region.memory_region.base_address + fake_region.memory_region.size_bytes;
+            
+            // Yes, it fits fully
+            if max_write_address <= max_region_address
+            {
+                // Then we can simply copy the write buffer into the region
+                for idx in 0..buffer.len()
+                {
+                    fake_region.payload[idx+region_relative_idx] = buffer[idx];
+                }
+
+                return Ok(());
+            }
+            
+            // Yes but only partially
+            else
+            {
+                // How many bytes do not fit in the region
+                let positions_outside = max_write_address - max_region_address;
+
+                // Perform a partial copy
+                for idx in 0..(buffer.len()-positions_outside)
+                {
+                    fake_region.payload[idx+region_relative_idx] = buffer[idx];
+                }
+
+                return Err(GenericOSInterface::GenericOSErrors::PartialWrite);
+            }
+
+        }
+    }
+
+    // No region found, report as error
+    return Err(GenericOSInterface::GenericOSErrors::GenericFail);
 }
 
 #[allow(unused_variables)] // TODO: IMPROVE THE API

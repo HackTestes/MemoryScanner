@@ -20,6 +20,7 @@ pub enum GenericOSErrors
     //ProcessDoesntExist,
     //PermissionDenied,
     PartialReadCopy, // Only copied part of the buffer
+    PartialWrite,
     SnapshotBufferIsTooSmall,
     QueryModuleError,
     QueryModuleNameError,
@@ -441,7 +442,7 @@ impl GenericProcess
     // vm stands for Virtual Memory
     // source -> destination
     // this is not unsafe relative to the caller, but it can definitely currupt the target
-    pub fn write_into_vm(&self, buffer: &[u8], absolute_vm_address: usize) -> Result<(), GenericOSErrors>
+    pub fn write_into_vm(&mut self, buffer: &[u8], absolute_vm_address: usize) -> Result<(), GenericOSErrors>
     {
         // The OSInterface function is responsible for understanding how to use the handle
         let result = OSInterface::write_into_process_vm(self.handle, buffer, absolute_vm_address, self);
@@ -980,14 +981,32 @@ mod tests
         // Start a zeroed buffer of 100 items
         let mut buffer: Vec<u8> = vec![0; 10];
 
-        let process = GenericProcess::attach(1).unwrap();
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
 
-        let operation_result = process.write_into_vm(&mut buffer[0..], 1);
+        let mut process = GenericProcess::create_mem_regions(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    vec![1; 100]),
+            ]
+        );
+
+        let operation_result = process.write_into_vm(&mut buffer[0..], 100);
 
         println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
 
         // Did it succeed?
         assert!(matches!( operation_result, Ok(()) ));
+
+        let mut expect = vec![1; 100];
+        for idx in 0..buffer.len()
+        {
+            expect[idx] = buffer[idx];
+        }
+
+        assert_eq!(process.custom_image[0].payload, expect);
     }
 
     #[test]
@@ -996,7 +1015,7 @@ mod tests
         // Start a zeroed buffer of 100 items
         let mut buffer: Vec<u8> = vec![0; 10];
 
-        let process = GenericProcess::attach(1).unwrap();
+        let mut process = GenericProcess::attach(1).unwrap();
 
         let operation_result = process.write_into_vm(&mut buffer[0..], 0);
 

@@ -15,6 +15,7 @@ use std::time::Duration;
 use std::thread;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 mod ThreadPool;
 mod WorkloadPartitioning;
 mod SearchEngines;
@@ -56,7 +57,7 @@ fn parse_operations<T: std::str::FromStr>(target_operations: Vec<(SearchEngines:
 }
 
 // This function is here to help me with code reuse (normal action and the freeze option)
-fn write_action_subroutine(command_config: &Configuration::Config, process_handle: &GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
+fn write_action_subroutine(command_config: &Configuration::Config, process_handle: &mut GenericOSInterface::GenericProcess) -> Result<(), GenericOSInterface::GenericOSErrors>
 {
     let write_result = match command_config.target_type
     {
@@ -557,7 +558,7 @@ fn main()
             {
                 if command_config.freeze == false
                 {
-                    let write_r = write_action_subroutine(&command_config, &process_handle);
+                    let write_r = write_action_subroutine(&command_config, &mut process_handle);
 
                     if write_r.is_ok()
                     {
@@ -576,8 +577,8 @@ fn main()
 
                     // We must also share the handle with the thread
                     // This will take ownership of the handle, so we must give it back
-                    let process_handle_arc_main = Arc::new(process_handle);
-                    let process_handle_arc_thread = process_handle_arc_main.clone();
+                    let mut process_handle_arc_main = Arc::new(Mutex::new(process_handle));
+                    let mut process_handle_arc_thread = process_handle_arc_main.clone();
 
                     let config_clone = command_config.clone();
 
@@ -588,7 +589,7 @@ fn main()
                         {
                             // write memory
                             // There is no error checking here, this means that any write error is ignored
-                            let _ = write_action_subroutine(&config_clone, &process_handle_arc_thread);
+                            let _ = write_action_subroutine(&config_clone, &mut process_handle_arc_thread.lock().unwrap());
                 
                             // sleep
                             thread::sleep(millis);
@@ -613,7 +614,7 @@ fn main()
                     let _res = thread_join_handle.join().unwrap();
 
                     // Now take the handle back
-                    process_handle = Arc::try_unwrap(process_handle_arc_main).unwrap();
+                    process_handle = Arc::try_unwrap(process_handle_arc_main).unwrap().into_inner().unwrap();
                 }
             },
 
