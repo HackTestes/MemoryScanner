@@ -388,7 +388,6 @@ impl GenericProcess
     pub fn get_modules(&self) -> Result<Vec<ProcessModule>, GenericOSErrors>
     {
         // Call the native OS implementation
-        println!("DEBUG> {:#?}", OSInterface::query_modules(self.handle, self));
         return OSInterface::query_modules(self.handle, self);
     }
 
