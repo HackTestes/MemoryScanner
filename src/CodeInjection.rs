@@ -196,7 +196,7 @@ fn inject_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEnt
             let nop_buffer: Vec<u8> = vec![nop_instruc; range_size];
             let injection_address = address + range_start;
 
-            println!("Injecting code. Instruction: {:?} \nAddress: {}", nop_buffer, injection_address);
+            println!("Injecting code. Instruction: {:X?} \nAddress: 0x{:X?}", nop_buffer, injection_address);
 
             if dry_run == false
             {
@@ -244,7 +244,7 @@ fn restore_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEn
             let restore_buffer = &instruction.instruction[range_start..range_start+range_size];
             let injection_address = address + range_start;
  
-            println!("Restoring code. Instruction: {:?} \nAddress: {}", restore_buffer, injection_address);
+            println!("Restoring code. Instruction: {:X?} \nAddress: 0x{:X?}", restore_buffer, injection_address);
 
             if dry_run == false
             {
