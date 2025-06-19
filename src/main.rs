@@ -5,7 +5,7 @@
 #![allow(unexpected_cfgs)]
 
 // Treat all warnings as errors
-//#![deny(warnings)]
+#![deny(warnings)]
 
 use std::env;
 use std::io;
@@ -16,6 +16,7 @@ use std::thread;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::fs;
 mod ThreadPool;
 mod WorkloadPartitioning;
 mod SearchEngines;
@@ -663,6 +664,38 @@ fn main()
                 {
                     saved_results.clear();
                     println!("All saved results removed. Now with: {}", saved_results.len());
+                }
+            },
+
+            CLIFrontEnd::ActionsEnum::Inject => 
+            {
+                // Read the injection file
+                let file_contents_r = fs::read_to_string(command_config.file_path.unwrap() );
+
+                if file_contents_r.is_err()
+                {
+                    eprintln!("Could not open the file or read it. Error: {:?}", file_contents_r.unwrap());
+                    continue;
+                }
+
+                // Parse it 
+                let injection_config_r = CodeInjectionFileParsing::parse_injection_file(file_contents_r.unwrap());
+
+                if injection_config_r.is_err()
+                {
+                    eprintln!("Could not parse the code injection file. Error: {:?}", injection_config_r);
+                    continue;
+                }
+
+                let injection_config = injection_config_r.unwrap();
+
+                // Inject code
+                let code_injection_r = CodeInjection::main_code_injection_flow(injection_config, &mut process_handle, command_config.dry_run, true);
+
+                if code_injection_r.is_err()
+                {
+                    eprintln!("Error during code injection. Error: {:?}", code_injection_r);
+                    continue;
                 }
             },
 

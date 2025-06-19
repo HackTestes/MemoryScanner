@@ -128,6 +128,7 @@ pub fn resume_process(process: &GenericOSInterface::GenericProcess) -> Result<()
     }
 }
 
+#[allow(unused_variables)]
 pub fn query_modules(handle: OSSpecificHandle, process: &GenericOSInterface::GenericProcess) -> Result< Vec<GenericOSInterface::ProcessModule>, GenericOSInterface::GenericOSErrors >
 {
     if process.custom_module.len() == 0

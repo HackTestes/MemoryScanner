@@ -23,6 +23,7 @@ pub enum CommandParsingError
     InvalidDisplayStyle,
     InvalidComparisonOperation,
     InvalidPagePermission,
+    NoFilePath,
     InvalidFreezeInterval
 }
 
@@ -176,6 +177,21 @@ mod Options
         pub const description: &str = "The absolute address in the target that will get something written to";
         pub const params: &[&str] = &["<ABSOLUTE_ADDRESS_DECIMAL>"];
     }
+
+    pub mod File
+    {
+        pub const short_option: &str = "-f";
+        pub const long_option: &str = "--file";
+        pub const description: &str = "A file path that holds additional configuration. In the case of code injection, it holds intructions to replace. NOTE: paths must not caontain spaces";
+        pub const params: &[&str] = &["<FILE_PATH>"];
+    }
+
+    pub mod DryRun
+    {
+        pub const short_option: &str = "-dr";
+        pub const long_option: &str = "--dry-run";
+        pub const description: &str = "Run the commands as normal but don't perform any change to the target. Only valid for code injection";
+    }
 }
 
 #[derive(Debug)]
@@ -190,6 +206,7 @@ pub enum ActionsEnum
     Save,
     Restore,
     Remove,
+    Inject,
     Exit
 }
 
@@ -242,6 +259,12 @@ mod Actions
         pub const text: &str = "remove";
         pub const description: &str = "Removes a saved result from the stack or all of them. By default, it removes only the last entry";
     }
+
+    pub mod Inject
+    {
+        pub const text: &str = "inject";
+        pub const description: &str = "Injects code into the attached process using instructions from a configuration file";
+    }
 }
 
 pub fn print_CLI_help()
@@ -265,6 +288,7 @@ pub fn print_CLI_help()
     output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Save::text, Actions::Save::description).as_str());
     output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Restore::text, Actions::Restore::description).as_str());
     output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Remove::text, Actions::Remove::description).as_str());
+    output.push_str(format!("\t{} \n\t\t{}\n\n\n", Actions::Inject::text, Actions::Inject::description).as_str());
 
     output.push_str("OPTIONS\n");
     output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::Help::long_option, Options::Help::short_option, Options::Help::description).as_str());
@@ -284,6 +308,8 @@ pub fn print_CLI_help()
     output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::Freeze::long_option, Options::Freeze::short_option, Options::Freeze::description).as_str());
     output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::FreezeInterval::long_option, Options::FreezeInterval::short_option, Options::FreezeInterval::params.join(" "), Options::FreezeInterval::description).as_str());
     output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::WriteAbsAddr::long_option, Options::WriteAbsAddr::short_option, Options::WriteAbsAddr::params.join(" "), Options::WriteAbsAddr::description).as_str());
+    output.push_str(format!("\t{}, {} {} \n\t\t{}\n\n\n", Options::File::long_option, Options::File::short_option, Options::File::params.join(" "), Options::File::description).as_str());
+    output.push_str(format!("\t{}, {} \n\t\t{}\n\n\n", Options::DryRun::long_option, Options::DryRun::short_option, Options::DryRun::description).as_str());
 
 
     println!("{}", output);
@@ -355,6 +381,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
         Actions::Save::text    => ActionsEnum::Save,
         Actions::Restore::text => ActionsEnum::Restore,
         Actions::Remove::text  => ActionsEnum::Remove,
+        Actions::Inject::text  => ActionsEnum::Inject,
         _ => {
             eprintln!("Invalid action: {}", action);
             return Err(CommandParsingError::InvalidAction);
@@ -739,6 +766,26 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                 opt_index += Options::WriteAbsAddr::params.len(); // Jumps the input param
             },
 
+            Options::File::short_option | Options::File::long_option =>
+            {
+                // Validate size
+                if opt_index+Options::File::params.len() >= command_list.len()
+                {
+                    eprintln!("Missing parameter");
+                    return Err(CommandParsingError::MissingParameter);
+                }
+
+                let file_path: String = command_list[opt_index+1].to_string();
+
+                configuration.file_path = Some(file_path);
+                opt_index += Options::File::params.len(); // Jumps the input param
+            },
+
+            Options::DryRun::short_option | Options::DryRun::long_option =>
+            {
+                configuration.dry_run = true;
+            },
+
             _ =>
             {
                 eprintln!("Invalid option: {}", current_option);
@@ -810,6 +857,15 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
         {
             return Err(CommandParsingError::NoTarget)
         }
+    }
+
+    // Does the inject action have a configuration file?
+    if configuration.action == ActionsEnum::Inject
+    {
+        if configuration.file_path == None
+        {
+            return Err(CommandParsingError::NoFilePath)
+        } 
     }
 
     return Ok(configuration);
@@ -918,6 +974,14 @@ mod tests
 
         let parsed_config = parsing_result.unwrap();
         assert_eq!(parsed_config.action, ActionsEnum::Remove);
+    }
+
+    #[test]
+    fn CLITest_Action_Inject()
+    {
+        assert_eq!(
+            argument_parsing("inject -f c:\\windows\\file\\path".to_string()).unwrap().action,
+            ActionsEnum::Inject);
     }
 
     // Option tests
@@ -1372,6 +1436,44 @@ mod tests
         assert_eq!(
             argument_parsing("write -aa agate -t 10".to_string()),
             Err(CommandParsingError::InvalidParameter));
+    }
+
+    #[test]
+    fn CLITest_Option_FilePath()
+    {
+        assert_eq!(
+            argument_parsing("inject -f c:\\windows\\file\\path".to_string()).unwrap().file_path,
+            Some("c:\\windows\\file\\path".to_string()));
+
+        assert_eq!(
+            argument_parsing("inject --file c:\\windows\\file\\path".to_string()).unwrap().file_path,
+            Some("c:\\windows\\file\\path".to_string()));
+    }
+
+    #[test]
+    fn CLITest_Option_FilePathFail()
+    {
+        assert_eq!(
+            argument_parsing("inject".to_string()),
+            Err(CommandParsingError::NoFilePath));
+    }
+
+    #[test]
+    fn CLITest_Option_DryRun()
+    {
+
+        // Default
+        assert_eq!(
+            argument_parsing("inject -f c:\\windows\\file\\path".to_string()).unwrap().dry_run,
+            false);
+
+        assert_eq!(
+            argument_parsing("inject -f c:\\windows\\file\\path -dr".to_string()).unwrap().dry_run,
+            true);
+
+        assert_eq!(
+            argument_parsing("inject -f c:\\windows\\file\\path --dry-run".to_string()).unwrap().dry_run,
+            true);
     }
 
 }

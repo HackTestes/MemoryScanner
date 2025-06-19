@@ -2,14 +2,13 @@ use crate::CodeInjectionFileParsing;
 use crate::GenericOSInterface;
 use std::io;
 use std::io::Write;
-use std::mem;
 
 // x86_64
 const nop_instruc: u8 = 0x90;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-enum CodeInjectionErrors
+pub enum CodeInjectionErrors
 {
     OSInterfaceErrors(GenericOSInterface::GenericOSErrors),
     ModuleNotFound,
@@ -268,7 +267,7 @@ fn restore_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEn
 
 // This fuction simply glues together the code injection helper functions
 // In this way, I can test parts of the code injection independently
-fn main_code_injection_flow(code_injection_config: CodeInjectionFileParsing::InjectionConfiguration, process: &mut GenericOSInterface::GenericProcess, dry_run: bool, wait_for_user: bool) -> Result<(), CodeInjectionErrors>
+pub fn main_code_injection_flow(code_injection_config: CodeInjectionFileParsing::InjectionConfiguration, process: &mut GenericOSInterface::GenericProcess, dry_run: bool, wait_for_user: bool) -> Result<(), CodeInjectionErrors>
 {
     // Copy all executable regions
     let copied_mem_regions_r = copy_memory_regions(code_injection_config.search_type.unwrap(), code_injection_config.module_name, process);

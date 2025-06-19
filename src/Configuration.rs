@@ -46,7 +46,9 @@ pub struct Config
     pub restore_entry: Option<usize>,
     pub freeze: bool,
     pub freeze_interval_ms: u64,
-    pub write_abs_addr: Option<usize>
+    pub write_abs_addr: Option<usize>,
+    pub dry_run: bool,
+    pub file_path: Option<String>
 }
 
 impl Config
@@ -110,7 +112,13 @@ impl Config
             freeze_interval_ms: 1000,
 
             // Writing to memory needs a position, so use an Option to reflect that
-            write_abs_addr: None
+            write_abs_addr: None,
+
+            // By default, we won't have dry runs (the user must be explicit)
+            dry_run: false,
+
+            // Configuration file for code injection
+            file_path: None
         };
     }
 }

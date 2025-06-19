@@ -97,6 +97,7 @@ pub fn resume_process(process: &GenericOSInterface::GenericProcess) -> Result<()
 // https://learn.microsoft.com/pt-br/windows/win32/api/psapi/nf-psapi-enumprocessmodulesex
 // https://learn.microsoft.com/pt-br/windows/win32/api/psapi/nf-psapi-getmodulefilenameexa
 // https://learn.microsoft.com/pt-br/windows/win32/api/psapi/ns-psapi-moduleinfo
+#[allow(unused_variables)]
 pub fn query_modules(handle: windows_sys::Win32::Foundation::HANDLE, process: &GenericOSInterface::GenericProcess) -> Result< Vec<GenericOSInterface::ProcessModule>, GenericOSInterface::GenericOSErrors >
 {
     // The windows API uses 32 bit integers for this (should be for historical reasons)

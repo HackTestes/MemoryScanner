@@ -146,7 +146,7 @@ fn remove_comments(line_content: &str) -> String
 }
 
 // https://stackoverflow.com/questions/52987181/how-can-i-convert-a-hex-string-to-a-u8-slice
-pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError>
+fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError>
 {
     let mut hex_list: Vec<u8> = vec![];
     for i in (0..s.len()).step_by(2)
@@ -389,7 +389,7 @@ fn parse_entry(line_content: String, injection_config: &mut InjectionConfigurati
     return Ok(());
 }
 
-fn parse_injection_file(injection_file_contents: String) -> Result<InjectionConfiguration, InjectionFileParsingErrors>
+pub fn parse_injection_file(injection_file_contents: String) -> Result<InjectionConfiguration, InjectionFileParsingErrors>
 {
     // Start with an empty config. We will change it during the parsing process
     let mut injection_config = InjectionConfiguration::empty();
