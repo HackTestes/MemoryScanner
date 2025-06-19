@@ -5,7 +5,7 @@
 // exe_memory: searches in all executable memory (useful for programs that do JIT code - .NET, JS, Python...)
 search_type = module
 
-module_name = module.exe
+module_name = victim_process.exe
 
 // Entries
-instruction = 0x9090, matches_allowed = 9999 // Search and replace the entirety of the instruction
+instruction = 0x8945C4, matches_allowed = 1 // Search and replace the entirety of the instruction
