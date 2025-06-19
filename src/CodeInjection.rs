@@ -103,7 +103,7 @@ fn copy_memory_regions(search_type: CodeInjectionFileParsing::SearchType, module
 }
 
 // Inject code into the process and on success, return where each instruction was replaced
-fn find_injection_code_address(mut memory_regions_payload: Vec< (usize, Vec<u8>) >,
+fn find_injection_code_address(memory_regions_payload: Vec< (usize, Vec<u8>) >,
                             instructions: Vec<CodeInjectionFileParsing::InjectionEntry>)
 
                             -> Result< Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)>, CodeInjectionErrors>
@@ -117,11 +117,11 @@ fn find_injection_code_address(mut memory_regions_payload: Vec< (usize, Vec<u8>)
         let mut matches: usize = 0;
         let mut absolute_vm_addresses: Vec<usize> = vec![];
         
-        for region_copy in &mut memory_regions_payload
+        for region_copy in &memory_regions_payload
         {
             // Just renaming it to better names
             let region_base_address = region_copy.0;
-            let region_buffer = mem::take(&mut region_copy.1);
+            let region_buffer = &region_copy.1;
 
             for payload_idx in 0..region_buffer.len()
             {
@@ -168,6 +168,7 @@ fn find_injection_code_address(mut memory_regions_payload: Vec< (usize, Vec<u8>)
     return Ok(instructions_abs_addresses);
 }
 
+#[allow(unused_assignments)]
 fn inject_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)>, process: &mut GenericOSInterface::GenericProcess, dry_run: bool) -> Result<(), CodeInjectionErrors>
 {
     for injection in injection_addresses
@@ -214,6 +215,7 @@ fn inject_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEnt
     return Ok(());
 }
 
+#[allow(unused_assignments)]
 fn restore_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEntry, Vec<usize>)>, process: &mut GenericOSInterface::GenericProcess, dry_run: bool) -> Result<(), CodeInjectionErrors>
 {
 
@@ -240,8 +242,11 @@ fn restore_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEn
 
         for address in absolute_addresses
         {
-            let restore_buffer = &instruction.instruction[range_start..range_size];
+            let restore_buffer = &instruction.instruction[range_start..range_start+range_size];
             let injection_address = address + range_start;
+
+            println!("DEBUG> instruction.instruction -> {:?}", instruction.instruction);
+            println!("DEBUG> range_size -> {}", range_size);
  
             println!("Restoring code. Instruction: {:?} \nAddress: {}", restore_buffer, injection_address);
 
@@ -367,7 +372,7 @@ mod tests
 
         assert_eq!(Ok(()), injection_result);
 
-        // Did the process stayed the same?
+        // Did the process stay the same?
         assert_eq!(process.custom_image[0].payload, memory_regions[0].payload);
     }
 
@@ -380,7 +385,7 @@ mod tests
                 ProcessModule::new("lib.dll".to_string(), 800, 100),
             ];
 
-        let mut memory_regions = vec![
+        let memory_regions = vec![
                 FakeGenericMemoryRegion::new(
                     GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
                     vec![1; 100]),
@@ -416,7 +421,7 @@ mod tests
                 ProcessModule::new("lib.dll".to_string(), 800, 100),
             ];
 
-        let mut memory_regions = vec![
+        let memory_regions = vec![
                 FakeGenericMemoryRegion::new(
                     GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
                     vec![1; 100]),
@@ -457,7 +462,7 @@ mod tests
                 ProcessModule::new("lib.dll".to_string(), 800, 100),
             ];
 
-        let mut memory_regions = vec![
+        let memory_regions = vec![
                 FakeGenericMemoryRegion::new(
                     GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
                     vec![1; 100]),
@@ -806,7 +811,7 @@ mod tests
 
         let address_to_inject = find_injection_code_address(region_copies, vec![needle.clone()]).unwrap();
 
-        let code_injection_r = inject_code(&address_to_inject, &mut process, false).unwrap();
+        let _ = inject_code(&address_to_inject, &mut process, false).unwrap();
 
         let mut expect: Vec<u8> = memory_regions[0].payload.clone();
         expect[0] = 0x90;
@@ -815,5 +820,184 @@ mod tests
         expect[3] = 0x90;
 
         assert_eq!(process.custom_image[0].payload, expect);
+    }
+
+    #[test]
+    fn TestCodeInjection_CodeInjection_RangeStart()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 800, 100),
+            ];
+
+        let mut memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+
+        memory_regions[0].payload[0] = 0x01;
+        memory_regions[0].payload[1] = 0x02;
+        memory_regions[0].payload[2] = 0x03; // I want to replace from here
+        memory_regions[0].payload[3] = 0x04;
+        memory_regions[0].payload[4] = 0x05;
+        memory_regions[0].payload[5] = 0x06;
+        memory_regions[0].payload[6] = 0x07;
+    
+        let mut process = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        let needle = InjectionEntry::new(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07], Some((2, 5)), 1);
+
+        let region_copies = copy_memory_regions(SearchType::exe_memory, None, &process).unwrap();
+
+        let address_to_inject = find_injection_code_address(region_copies, vec![needle.clone()]).unwrap();
+
+        let _ = inject_code(&address_to_inject, &mut process, false).unwrap();
+
+        let mut expect: Vec<u8> = memory_regions[0].payload.clone();
+        expect[2] = 0x90;
+        expect[3] = 0x90;
+        expect[4] = 0x90;
+        expect[5] = 0x90;
+        expect[6] = 0x90;
+
+        assert_eq!(process.custom_image[0].payload, expect);
+    }
+
+    #[test]
+    fn TestCodeInjection_CodeInjection_RangeSize()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 800, 100),
+            ];
+
+        let mut memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+
+        memory_regions[0].payload[0] = 0x01;
+        memory_regions[0].payload[1] = 0x02;
+        memory_regions[0].payload[2] = 0x03; // I want to replace from here
+        memory_regions[0].payload[3] = 0x04;
+        memory_regions[0].payload[4] = 0x05;
+        memory_regions[0].payload[5] = 0x06; // And stop here
+        memory_regions[0].payload[6] = 0x07;
+    
+        let mut process = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        let needle = InjectionEntry::new(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07], Some((2, 4)), 1);
+
+        let region_copies = copy_memory_regions(SearchType::exe_memory, None, &process).unwrap();
+
+        let address_to_inject = find_injection_code_address(region_copies, vec![needle.clone()]).unwrap();
+
+        let _ = inject_code(&address_to_inject, &mut process, false).unwrap();
+
+        let mut expect: Vec<u8> = memory_regions[0].payload.clone();
+        expect[2] = 0x90;
+        expect[3] = 0x90;
+        expect[4] = 0x90;
+        expect[5] = 0x90;
+
+        assert_eq!(process.custom_image[0].payload, expect);
+    }
+
+    #[test]
+    fn TestCodeInjection_CodeRestoration()
+    {
+
+        let modules = vec![
+                ProcessModule::new("module.exe".to_string(), 100, 100),
+                ProcessModule::new("lib.dll".to_string(), 800, 100),
+            ];
+
+        let mut memory_regions = vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 100, 100),
+                    vec![1; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write|PageProtection_Execute, GenericRegionState::Resident, 500, 100),
+                    vec![2; 100]),
+
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(PageProtection_Read|PageProtection_Write, GenericRegionState::Resident, 800, 100),
+                    vec![3; 100]),
+            ];
+
+        memory_regions[0].payload[0] = 0xAA;
+        memory_regions[0].payload[1] = 0xAA;
+        memory_regions[0].payload[2] = 0xAA;
+        memory_regions[0].payload[3] = 0xAA;
+        memory_regions[0].payload[4] = 0xAA; // Don't replace this one 
+
+        memory_regions[0].payload[20] = 0xAA;
+        memory_regions[0].payload[21] = 0xAA;
+        memory_regions[0].payload[22] = 0xAA;
+        memory_regions[0].payload[23] = 0xAA;
+        memory_regions[0].payload[24] = 0xAA; // Don't replace this one 
+
+        memory_regions[0].payload[50] = 0xBB;
+        memory_regions[0].payload[51] = 0xBB;
+        memory_regions[0].payload[52] = 0xBB;
+        memory_regions[0].payload[53] = 0xBB;
+
+        memory_regions[1].payload[50] = 0xCC;
+        memory_regions[1].payload[51] = 0xCC; // Replace from here
+        memory_regions[1].payload[52] = 0xCC;
+        memory_regions[1].payload[53] = 0xCC; // Stop here
+        memory_regions[1].payload[54] = 0xCC;
+        memory_regions[1].payload[55] = 0xCC;
+    
+        let mut process = GenericProcess::create(
+            1,
+            memory_regions.clone(),
+            modules.clone(),
+        );
+
+        let needles = vec![
+            InjectionEntry::new(vec![0xAA, 0xAA, 0xAA, 0xAA, 0xAA], Some((0, 4)), 2),
+            InjectionEntry::new(vec![0xBB, 0xBB, 0xBB, 0xBB], None, 1),
+            InjectionEntry::new(vec![0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC], Some((1, 3)), 1),
+        ];
+
+        let configuration = InjectionConfiguration::new(Some(SearchType::exe_memory), None, needles);
+
+        let injection_result = main_code_injection_flow(configuration, &mut process, false, false);
+
+        assert_eq!(Ok(()), injection_result);
+
+        // Did the process stay the same?
+        assert_eq!(process.custom_image[0].payload, memory_regions[0].payload);
+        assert_eq!(process.custom_image[1].payload, memory_regions[1].payload);
     }
 }

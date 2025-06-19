@@ -1010,6 +1010,40 @@ mod tests
     }
 
     #[test]
+    fn TestProcessPartialWrite()
+    {
+        // Start a zeroed buffer of 100 items
+        let mut buffer: Vec<u8> = vec![0; 20];
+
+        let page_perms = PageProtection_Read|PageProtection_Write;
+        let page_state = GenericRegionState::Resident;
+
+        let mut process = GenericProcess::create_mem_regions(
+            1, // PID
+            vec![
+                FakeGenericMemoryRegion::new(
+                    GenericMemoryRegion::new(page_perms.clone(), page_state.clone(), 100, 100),
+                    vec![1; 100]),
+            ]
+        );
+
+        let operation_result = process.write_into_vm(&mut buffer[0..], 190);
+
+        println!("Op result {:?} - buffer: {:?}", operation_result, buffer);
+
+        // Did it succeed?
+        assert_eq!(operation_result, Err(GenericOSErrors::PartialWrite) );
+
+        let mut expect = vec![1; 100];
+        for idx in 0..buffer.len()/2
+        {
+            expect[idx+90] = buffer[idx];
+        }
+
+        assert_eq!(process.custom_image[0].payload, expect);
+    }
+
+    #[test]
     fn TestProcessWriteFail()
     {
         // Start a zeroed buffer of 100 items

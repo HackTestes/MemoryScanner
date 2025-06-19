@@ -577,8 +577,8 @@ fn main()
 
                     // We must also share the handle with the thread
                     // This will take ownership of the handle, so we must give it back
-                    let mut process_handle_arc_main = Arc::new(Mutex::new(process_handle));
-                    let mut process_handle_arc_thread = process_handle_arc_main.clone();
+                    let process_handle_arc_main = Arc::new(Mutex::new(process_handle));
+                    let process_handle_arc_thread = process_handle_arc_main.clone();
 
                     let config_clone = command_config.clone();
 
