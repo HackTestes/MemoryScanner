@@ -165,7 +165,8 @@ pub fn query_modules(handle: windows_sys::Win32::Foundation::HANDLE, process: &G
 
         let module_name_success_code = unsafe
         {
-            windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW(
+            windows_sys::Win32::System::ProcessStatus::GetModuleFileNameExW(
+                handle,
                 module_handle,
                 module_name_buffer.as_mut_ptr(),
                 module_name_buffer_size_bytes
@@ -179,7 +180,8 @@ pub fn query_modules(handle: windows_sys::Win32::Foundation::HANDLE, process: &G
         }
 
         // Everything went fine, so get the name
-        let module_name: String = String::from_utf16(&module_name_buffer).unwrap();
+        let terminate_pos = module_name_buffer.iter().position(|c| *c == 0).unwrap();
+        let module_name: String = String::from_utf16(&module_name_buffer[0..terminate_pos]).unwrap();
 
 
         // Get module info (base address and size)

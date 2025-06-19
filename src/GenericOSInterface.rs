@@ -258,6 +258,8 @@ pub struct GenericProcess
     pub custom_module: Vec< ProcessModule >,
 }
 
+unsafe impl Send for GenericProcess{}
+
 // Closes the handle, otherwise we will have a memory leak with the descriptors
 impl Drop for GenericProcess
 {
@@ -386,6 +388,7 @@ impl GenericProcess
     pub fn get_modules(&self) -> Result<Vec<ProcessModule>, GenericOSErrors>
     {
         // Call the native OS implementation
+        println!("DEBUG> {:#?}", OSInterface::query_modules(self.handle, self));
         return OSInterface::query_modules(self.handle, self);
     }
 
