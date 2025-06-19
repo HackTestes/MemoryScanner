@@ -1,0 +1,11 @@
+// Comments are just like in Rust
+// inject -dr -f .\docs\code_injection_example.txt
+
+// module: takes the name of a file (.elf, .exe, .dll, .so) and look for its content in memory
+// exe_memory: searches in all executable memory (useful for programs that do JIT code - .NET, JS, Python...)
+search_type = module
+
+module_name = module.exe
+
+// Entries
+instruction = 0x9090, matches_allowed = 9999 // Search and replace the entirety of the instruction
