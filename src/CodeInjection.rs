@@ -244,9 +244,6 @@ fn restore_code(injection_addresses: &Vec<(CodeInjectionFileParsing::InjectionEn
         {
             let restore_buffer = &instruction.instruction[range_start..range_start+range_size];
             let injection_address = address + range_start;
-
-            println!("DEBUG> instruction.instruction -> {:?}", instruction.instruction);
-            println!("DEBUG> range_size -> {}", range_size);
  
             println!("Restoring code. Instruction: {:?} \nAddress: {}", restore_buffer, injection_address);
 
