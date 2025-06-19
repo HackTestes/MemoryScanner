@@ -181,7 +181,7 @@ pub fn query_modules(handle: windows_sys::Win32::Foundation::HANDLE, process: &G
 
         // Everything went fine, so get the name
         let terminate_pos = module_name_buffer.iter().position(|c| *c == 0).unwrap();
-        let module_name: String = String::from_utf16(&module_name_buffer[0..terminate_pos]).unwrap();
+        let module_name: String = String::from_utf16(&module_name_buffer[0..terminate_pos]).unwrap().split("\\").collect::<Vec<_>>().last().unwrap().to_string();
 
 
         // Get module info (base address and size)
