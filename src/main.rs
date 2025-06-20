@@ -31,6 +31,7 @@ mod CLIFrontEnd;
 mod Configuration;
 mod CodeInjectionFileParsing;
 mod CodeInjection;
+mod Tokenization;
 
 fn GetNumberOfMatches(all_matches: &Vec<Matches::AddressMatches>) -> usize
 {

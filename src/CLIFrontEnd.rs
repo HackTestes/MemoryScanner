@@ -2,11 +2,13 @@ use crate::Configuration::*;
 use crate::SearchEngines;
 use crate::Matches;
 use crate::GenericOSInterface;
+use crate::Tokenization;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum CommandParsingError
 {
+    InvalidCommand(Tokenization::TokenizationError),
     InvalidAction,
     InvalidOption,
     InvalidParameter,
@@ -362,8 +364,14 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     // Create the default configuration to be later modified
     let mut configuration = Config::new();
 
-    // Split the command to emulate a normal argument from command line
-    let mut command_list: Vec<_> = command.split(" ").collect();
+    // Tokenize the command to emulate a normal argument from command line
+    let command_list_r = Tokenization::tokenize(command);
+
+    let mut command_list: Vec<_> = match command_list_r
+    {
+        Ok(value) => value,
+        Err(error) => return Err(CommandParsingError::InvalidCommand(error))
+    };
 
     // Get actions
     // Actions should always be the first item
@@ -402,7 +410,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
     let mut opt_index = 0;
     while opt_index < command_list.len()
     {
-        let current_option = command_list[opt_index];
+        let current_option = command_list[opt_index].as_str();
 
         match current_option
         {
@@ -490,7 +498,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::InvalidCopyBufferSize);
                 }
 
-                let unit_measurement = command_list[opt_index+2];
+                let unit_measurement = command_list[opt_index+2].as_str();
 
                 let copy_buffer_size_bytes: usize = match unit_measurement
                 {
@@ -516,7 +524,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let target_type_input = command_list[opt_index+1];
+                let target_type_input = command_list[opt_index+1].as_str();
 
                 let target_type_enum: TargetType = match target_type_input
                 {
@@ -551,7 +559,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let target_value = command_list[opt_index+1];
+                let target_value = command_list[opt_index+1].as_str();
 
                 // I will defer the checking to the end, so I can validate if the value can be parsed to the correct target type
 
@@ -568,7 +576,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let cmp_op = command_list[opt_index+1];
+                let cmp_op = command_list[opt_index+1].as_str();
 
                 let cmp_op_enum: SearchEngines::ComparisonOperation = match cmp_op
                 {
@@ -608,7 +616,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let engine_name = command_list[opt_index+1];
+                let engine_name = command_list[opt_index+1].as_str();
 
                 let engine_name_enum: SearchEngines::Engines = match engine_name
                 {
@@ -635,7 +643,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let page_perms_r = page_permissions_parse(command_list[opt_index+1]);
+                let page_perms_r = page_permissions_parse(&command_list[opt_index+1]);
 
                 if page_perms_r.is_err()
                 {
@@ -656,7 +664,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let page_perms_r = page_permissions_parse(command_list[opt_index+1]);
+                let page_perms_r = page_permissions_parse(&command_list[opt_index+1]);
 
                 if page_perms_r.is_err()
                 {
@@ -677,7 +685,7 @@ pub fn argument_parsing(command: String) -> Result<Config, CommandParsingError>
                     return Err(CommandParsingError::MissingParameter);
                 }
 
-                let display_style = command_list[opt_index+1];
+                let display_style = command_list[opt_index+1].as_str();
 
                 let display_style_enum: Matches::MatchDisplayStyle = match display_style
                 {
