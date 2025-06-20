@@ -675,7 +675,7 @@ fn main()
 
                 if file_contents_r.is_err()
                 {
-                    eprintln!("Could not open the file or read it. Error: {:?}", file_contents_r.unwrap());
+                    eprintln!("Could not open the file or read it. Error: {:?}", file_contents_r);
                     continue;
                 }
 

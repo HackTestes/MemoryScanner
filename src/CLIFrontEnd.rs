@@ -184,7 +184,7 @@ mod Options
     {
         pub const short_option: &str = "-f";
         pub const long_option: &str = "--file";
-        pub const description: &str = "A file path that holds additional configuration. In the case of code injection, it holds intructions to replace. NOTE: paths must not caontain spaces";
+        pub const description: &str = "A file path that holds additional configuration. In the case of code injection, it holds intructions to replace. NOTE: paths with spaces must be enclosed in quotes";
         pub const params: &[&str] = &["<FILE_PATH>"];
     }
 
