@@ -3,7 +3,8 @@
 #[derive(PartialEq)]
 pub enum TokenizationError
 {
-    UnclosedQuotes
+    UnclosedQuotes,
+    EmptyString
 }
 
 fn is_empty_space(character: char) -> bool
@@ -90,7 +91,7 @@ pub fn tokenize(string_text: String) -> Result<Vec<String>, TokenizationError>
         }
     }
 
-    // If we fineshed the process with a token yet to pushed (end quote is the last character)
+    // If we finished the process with a token yet to pushed (end quote is the last character)
     if token.len() != 0
     {
         tokens.push(token);
@@ -100,6 +101,12 @@ pub fn tokenize(string_text: String) -> Result<Vec<String>, TokenizationError>
     if open_single_quote == true || open_double_quotes == true
     {
         return Err(TokenizationError::UnclosedQuotes);
+    }
+
+    // Is it an empty String?
+    if tokens.len() == 0
+    {
+        return Err(TokenizationError::EmptyString);
     }
 
     return Ok(tokens);
@@ -151,6 +158,14 @@ mod tests
         assert_eq!(
             tokenize("what I want to become: \"a new token!\". So Now \'unclose it".to_string()),
             Err(TokenizationError::UnclosedQuotes));
+    }
+
+    #[test]
+    fn TokenTest_EmptyString()
+    {
+        assert_eq!(
+            tokenize("".to_string()),
+            Err(TokenizationError::EmptyString));
     }
 
 }
