@@ -42,7 +42,7 @@ Here the **range** has the clear benefit.
     * Address per match: 4 GiB (512 MiB x 8)
     * Range: 12 GiB or 8 GiB (512 x 24 or 512 x 16)
 
-Here the **address per match** uses the least amount of memory. The range can use up to 3 times as much memory.
+Here the **address per match** uses the least amount of memory. The range can use up to 3 times more memory.
 
 You can notice that this pattern wastes up to 2 extra bytes per match with the range strategy.
 
@@ -108,6 +108,54 @@ Therefore, using the range strategy really seems like the best approach for mini
 
 Using a data type can help reduce the number of matches when searching for changed or unchanged values.
 
+Let's take for example a small 8 byte section of memory to search:
+
+```
+         0000 0000   0000 0000   0000 0000   0000 0000   0000 0000   0000 0000   0000 0000   0000 0000   0000 0000
+       + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + 
+Address     00          01          02          03          04          05           06         07           08     
+```
+
+Now consider that we are looking for a **changed** value and that one byte was modified at address 04. If we procced with a simple byte search, it will find and store only the address 04, however, if we presume that the value is a 16 bit integer, it will match the addresses 03 and 04. So, if the value was indeed a 16 bit integer, the single byte search would have lost the surrounding information and another scan would be necessary to the correct addresses.
+
+This means that for changed scans, we need the correct data type to be able to get all of the data at the correct place, otherwise, we might lose information.
+
+```
+                                                       +----SECOND CHANGE------+
+                                                       |                       |
+                                                       |                       |
+                                           +-FIRST DETECTED CHANGE-+           |
+                                           |           |           |           |
+                                           |           |           |           |
+         0000 0000   0000 0000   0000 0000   0000 0000   1111 1111   0000 0000   0000 0000   0000 0000   0000 0000
+       + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + 
+Address     00          01          02          03          04          05           06         07           08     
+```
+
+Now we try the same thing, but we scan for **unchanged** values and let's also change the value type to a 32 bit integer just to make things easier. In this scan, most addreses would have been discarded while the simple byte search would store every address except for the 04. The advantage here is that we can take the results from the byte search and calculate it to bigger type (yes, it would remove some results in the process).
+
+Here, whatever is used will be good enough, since both will store the same amount of information. We can even change the data type from 8 byte to 32 byte or vice-versa, especially since all bits are unchanged in bigger types, so they are also valid for smaller types (this assumption is not valid for changed values).
+
+> [!NOTE]
+> I am assuming here that only the memory range is stored (start-size) and not the individial addresses. If we use the later, the single byte search will use more memory.
+
+```
+        +-------------UNCHANGED SECTION----------------+           +-------------UNCHANGED SECTION-----------------+ 
+        |                                              |           |                                               | 
+        |                                              |           |                                               | 
+         0000 0000   0000 0000   0000 0000   0000 0000   1111 1111   0000 0000   0000 0000   0000 0000   0000 0000   
+       + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + 
+Address     00          01          02          03          04          05           06         07           08      
+```
+
+Things would take a turn if only the 04 was unchanged. This would make the single byte search store a value (address 04) that would be useless for bigger types.
+
+```
+         1111 1111   1111 1111   1111 1111   1111 1111   0000 0000   1111 1111   1111 1111   1111 1111   1111 1111   
+       + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + --------- + 
+Address     00          01          02          03          04          05           06         07           08      
+```
+
 ## Compute optimizations
 
 ### Multithreading (WIP)
@@ -120,20 +168,40 @@ $$
 interations\ per\ threads = \frac{numItems}{numThreads} + numThreads
 $$
 
+*I STILL NEED TO MAKE THE MATH ABOUT THIS SECTION*
+
 #### Partitioning the data
 
-Same algorithm as the known value search Each thread reads a private section of a giver page like this:
+Same algorithm as the known value search, each thread reads a private section of a given page like this:
 
-Thread 1 - 0:100
-Thread 2 - 100:200
-...
+* Page 200 addresses and 2 threads
+    * Thread 1 - 0:100
+    * Thread 2 - 100:200
 
 #### Merging
 
 The main thread must read the first and final results of each thread and verify if they are contiguous. If they are, they should be merged into a single result.
 
-## Data size for unchanged values
+Consider the following results from a hypothetical search:
+```
+Memory section: 1000 addresses
 
-It is possible to convert an u8 search for an unknown unchaged value to a bigger type, because all bytes will necessarily be the same. Changed values however must always use the same type for a scan.
+Partitioning between 5 threads
 
-## Converting ranges matches into direct addresses (unknown to known search)
+Thread 1 (0 - 200)*
+    -> 55 - 199
+
+Thread 2 (200 - 400)*
+    -> 200 - 400
+
+Thread 3 (400 - 600)
+    -> 450 - 500
+
+Thread 4 (600 - 800)
+    -> ----
+
+Thread 5 (800 - 1000)
+    -> 875 - 950
+
+Results from T1 and T2 are contiguous and, thus, will merge into: 55 - 400.
+```
